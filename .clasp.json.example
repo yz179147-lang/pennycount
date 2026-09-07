@@ -1,0 +1,5 @@
+{
+  "//": "複製成 .clasp.json 並填入你的 scriptId（Apps Script 專案設定裡可以找到）",
+  "scriptId": "在這裡填入你的 Script ID",
+  "rootDir": "apps-script"
+}

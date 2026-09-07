@@ -1,0 +1,13 @@
+# clasp：含 scriptId，屬於個人設定
+.clasp.json
+.clasprc.json
+
+# 依賴與系統檔
+node_modules/
+.DS_Store
+Thumbs.db
+
+# 本機設定／機密（API_TOKEN 等一律放 Apps Script 指令碼屬性，不進版控）
+.env
+*.local
+tests/shots/
