@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<title>PennyCount 記帳</title>
+<meta name="description" content="用 Google Sheet 當資料庫的輕量記帳工具">
+<meta name="theme-color" content="#17131D" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#F8F2FB" media="(prefers-color-scheme: light)">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="PennyCount">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- 首次啟動：設定後端網址與存取碼 -->
+<section id="onboarding" class="onboarding" hidden>
+  <div class="onboarding__card">
+    <h1>PennyCount</h1>
+    <p class="muted">連到你自己的 Google Sheet 帳本。這些設定只存在這台裝置上。</p>
+    <label class="field">
+      <span>Apps Script 網頁應用程式網址</span>
+      <input id="setup-url" type="url" inputmode="url" autocomplete="off"
+             placeholder="https://script.google.com/macros/s/AKfy.../exec">
+    </label>
+    <label class="field">
+      <span>存取碼 API_TOKEN</span>
+      <input id="setup-token" type="text" autocomplete="off" placeholder="執行 setup() 後取得">
+    </label>
+    <p id="setup-error" class="error" hidden></p>
+    <button id="setup-save" class="btn btn--primary">連線</button>
+  </div>
+</section>
+
+<div id="app" class="app" hidden>
+  <header class="topbar">
+    <button id="month-prev" class="topbar__nav" aria-label="上個月">‹</button>
+    <div class="topbar__center">
+      <input id="month" class="topbar__month" type="month" aria-label="選擇月份">
+      <div class="topbar__stats">
+        <span class="stat stat--expense">支出 <b id="sum-expense">-</b></span>
+        <span class="stat stat--income">收入 <b id="sum-income">-</b></span>
+        <span class="stat">結餘 <b id="sum-balance">-</b></span>
+      </div>
+    </div>
+    <button id="month-next" class="topbar__nav" aria-label="下個月">›</button>
+  </header>
+
+  <main class="views">
+    <!-- 記帳 -->
+    <section class="view" data-view="entry">
+      <div class="type-switch" role="tablist">
+        <button class="type-switch__btn is-active" data-type="expense" role="tab">支出</button>
+        <button class="type-switch__btn" data-type="income" role="tab">收入</button>
+      </div>
+
+      <div class="amount" aria-live="polite">
+        <span class="amount__currency">$</span>
+        <span id="amount" class="amount__value">0</span>
+      </div>
+
+      <div id="categories" class="categories" role="listbox" aria-label="分類"></div>
+
+      <div class="entry-meta">
+        <input id="entry-date" type="date" aria-label="日期">
+        <input id="entry-note" type="text" placeholder="備註（選填）" maxlength="60" aria-label="備註">
+      </div>
+
+      <div class="keypad">
+        <button class="key" data-key="7">7</button>
+        <button class="key" data-key="8">8</button>
+        <button class="key" data-key="9">9</button>
+        <button class="key" data-key="4">4</button>
+        <button class="key" data-key="5">5</button>
+        <button class="key" data-key="6">6</button>
+        <button class="key" data-key="1">1</button>
+        <button class="key" data-key="2">2</button>
+        <button class="key" data-key="3">3</button>
+        <button class="key" data-key=".">.</button>
+        <button class="key" data-key="0">0</button>
+        <button class="key" data-key="del" aria-label="退格">⌫</button>
+      </div>
+
+      <button id="save" class="btn btn--primary btn--save">儲存</button>
+    </section>
+
+    <!-- 紀錄 -->
+    <section class="view" data-view="records" hidden>
+      <div class="filters">
+        <input id="search" type="search" placeholder="搜尋備註或分類" aria-label="搜尋">
+        <select id="filter-type" aria-label="收支篩選">
+          <option value="">全部</option>
+          <option value="expense">只看支出</option>
+          <option value="income">只看收入</option>
+        </select>
+      </div>
+      <div id="record-list" class="record-list"></div>
+    </section>
+
+    <!-- 統計 -->
+    <section class="view" data-view="stats" hidden>
+      <div id="stats-body" class="stats"></div>
+    </section>
+
+    <!-- 設定 -->
+    <section class="view" data-view="settings" hidden>
+      <div class="settings">
+        <button id="open-categories" class="settings__link">
+          <span>🏷️ 管理分類</span><span class="settings__link-hint">新增、改名、換圖示、設預算 ›</span>
+        </button>
+        <hr>
+        <label class="field">
+          <span>後端網址</span>
+          <input id="cfg-url" type="url" inputmode="url" autocomplete="off">
+        </label>
+        <label class="field">
+          <span>存取碼</span>
+          <input id="cfg-token" type="text" autocomplete="off">
+        </label>
+        <div class="settings__row">
+          <button id="cfg-save" class="btn btn--primary">儲存設定</button>
+          <button id="cfg-test" class="btn">測試連線</button>
+        </div>
+        <p id="cfg-status" class="muted"></p>
+        <hr>
+        <p class="muted">待送出的紀錄：<b id="outbox-count">0</b> 筆</p>
+        <button id="outbox-flush" class="btn">立即重送</button>
+        <hr>
+        <p class="muted">在 iPhone 上：Safari 開啟此頁 → 分享 → 加入主畫面，就能像 App 一樣使用。</p>
+        <button id="cfg-reset" class="btn btn--danger">清除本機設定</button>
+      </div>
+    </section>
+
+    <!-- 分類管理 -->
+    <section class="view" data-view="categories" hidden>
+      <div class="subhead">
+        <button id="categories-back" class="subhead__back" aria-label="返回">‹ 設定</button>
+        <h2 class="subhead__title">管理分類</h2>
+      </div>
+      <div class="type-switch" role="tablist">
+        <button class="type-switch__btn is-active" data-cattype="expense" role="tab">支出分類</button>
+        <button class="type-switch__btn" data-cattype="income" role="tab">收入分類</button>
+      </div>
+      <div id="category-manager" class="category-manager"></div>
+      <button id="category-add" class="btn btn--primary btn--save">＋ 新增分類</button>
+      <p class="muted hint">拖不動？用每列右邊的 ↑ ↓ 調整順序，順序會同步到記帳畫面。<br>
+        刪除分類時，原本的紀錄會自動改成「其他」，不會消失。</p>
+    </section>
+  </main>
+
+  <nav class="tabbar">
+    <button class="tab is-active" data-tab="entry"><span>＋</span>記帳</button>
+    <button class="tab" data-tab="records"><span>☰</span>紀錄</button>
+    <button class="tab" data-tab="stats"><span>％</span>統計</button>
+    <button class="tab" data-tab="settings"><span>⚙</span>設定</button>
+  </nav>
+</div>
+
+<!-- 編輯／刪除單筆 -->
+<div id="sheet" class="sheet" hidden>
+  <div class="sheet__backdrop" data-close></div>
+  <div class="sheet__panel" role="dialog" aria-modal="true" aria-label="編輯紀錄">
+    <h2 class="sheet__title">編輯紀錄</h2>
+    <label class="field"><span>金額</span><input id="edit-amount" type="number" inputmode="decimal" step="0.01"></label>
+    <label class="field"><span>分類</span><select id="edit-category"></select></label>
+    <label class="field"><span>日期</span><input id="edit-date" type="date"></label>
+    <label class="field"><span>備註</span><input id="edit-note" type="text" maxlength="60"></label>
+    <div class="sheet__actions">
+      <button id="edit-delete" class="btn btn--danger">刪除</button>
+      <button id="edit-cancel" class="btn" data-close>取消</button>
+      <button id="edit-save" class="btn btn--primary">儲存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 新增／編輯分類 -->
+<div id="category-sheet" class="sheet" hidden>
+  <div class="sheet__backdrop" data-close></div>
+  <div class="sheet__panel" role="dialog" aria-modal="true" aria-label="分類設定">
+    <h2 id="category-sheet-title" class="sheet__title">新增分類</h2>
+
+    <div class="icon-row">
+      <button id="icon-preview" class="icon-preview" aria-label="目前圖示">🏷️</button>
+      <label class="field field--grow">
+        <span>分類名稱</span>
+        <input id="category-name" type="text" maxlength="12" placeholder="例如：早午餐">
+      </label>
+    </div>
+
+    <div class="field">
+      <span>選一個圖示</span>
+      <div class="emoji-tabs" id="emoji-tabs"></div>
+      <div class="emoji-grid" id="emoji-grid"></div>
+      <input id="category-icon" type="text" maxlength="8" class="emoji-input"
+             placeholder="或直接貼上任何 emoji" aria-label="自訂圖示">
+    </div>
+
+    <label class="field">
+      <span>每月預算（選填，0 = 不設定）</span>
+      <input id="category-budget" type="number" inputmode="numeric" min="0" step="100" placeholder="0">
+    </label>
+
+    <label class="field">
+      <span>LINE 關鍵字（選填，逗號分隔）</span>
+      <input id="category-keywords" type="text" placeholder="例如：蛋餅, 三明治, brunch">
+      <small class="field__hint">在 LINE 打「蛋餅 55」就會自動歸到這一類。</small>
+    </label>
+
+    <p id="category-error" class="error" hidden></p>
+    <div class="sheet__actions">
+      <button id="category-delete" class="btn btn--danger" hidden>刪除</button>
+      <button id="category-cancel" class="btn" data-close>取消</button>
+      <button id="category-save" class="btn btn--primary">儲存</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast" hidden></div>
+
+<script src="api.js"></script>
+<script src="charts.js"></script>
+<script src="app.js"></script>
+<script src="categories.js"></script>
+<script src="stats.js"></script>
+<script>App.boot();</script>
+</body>
+</html>
