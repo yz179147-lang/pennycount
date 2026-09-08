@@ -5,7 +5,15 @@
  */
 
 /** 唯讀 action 不會改資料，前端可以用 GET 呼叫。 */
-const READ_ACTIONS = ['ping', 'listRecords', 'getRecord', 'listCategories', 'summary'];
+const READ_ACTIONS = [
+  'ping',
+  'listRecords',
+  'getRecord',
+  'listCategories',
+  'categoryUsage',
+  'summary',
+  'analytics',
+];
 
 function handleApi_(request) {
   const action = String(request.action || '').trim();
@@ -26,11 +34,14 @@ function dispatch_(action, req) {
     case 'ping':
       return {
         service: 'PennyCount',
+        version: 2,
         time: nowIso_(),
         timeZone: scriptTimeZone_(),
         today: today_(),
+        month: currentMonth_(),
       };
 
+    // ---- 紀錄
     case 'listRecords':
       return queryRecords({
         from: req.from,
@@ -48,7 +59,7 @@ function dispatch_(action, req) {
 
     case 'addRecord':
       return createRecord(req.record || req, {
-        source: 'web',
+        source: req.source === 'line' ? 'line' : 'web',
         user: activeUser_(),
       });
 
@@ -58,14 +69,31 @@ function dispatch_(action, req) {
     case 'deleteRecord':
       return deleteRecord(req.id);
 
+    // ---- 分類
     case 'listCategories':
-      return listCategories();
+      return listCategories({ includeArchived: req.includeArchived === true || req.includeArchived === 'true' });
+
+    case 'categoryUsage':
+      return categoryUsage();
 
     case 'addCategory':
       return createCategory(req.category || req);
 
+    case 'updateCategory':
+      return updateCategory(req.id, req.category || req);
+
+    case 'deleteCategory':
+      return deleteCategory(req.id, req.reassignTo);
+
+    case 'reorderCategories':
+      return reorderCategories(req.ids);
+
+    // ---- 統計
     case 'summary':
       return summarize({ from: req.from, to: req.to, month: req.month });
+
+    case 'analytics':
+      return analytics({ month: req.month, months: req.months });
 
     default:
       throw ApiError('UNKNOWN_ACTION', '不支援的 action：' + action);
@@ -103,7 +131,7 @@ function coerceParams_(params) {
     const value = params[key];
     out[key] = Array.isArray(value) ? value[0] : value;
   });
-  ['limit', 'offset', 'amount'].forEach(function (key) {
+  ['limit', 'offset', 'amount', 'months', 'budget', 'order'].forEach(function (key) {
     if (out[key] !== undefined && out[key] !== '') out[key] = Number(out[key]);
   });
   return out;

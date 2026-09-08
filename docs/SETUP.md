@@ -51,10 +51,30 @@ LINE_HOOK_KEY（webhook 網址的 key 參數）：xxxxxxxx
 | 工作表 | 用途 |
 | --- | --- |
 | `Records` | 所有帳目。欄位：id / date / type / category / amount / note / payment / source / user / createdAt / updatedAt |
-| `Categories` | 分類清單，可自己增修（type 填 `expense` 或 `income`） |
+| `Categories` | 分類設定，見下表 |
 | `Logs` | LINE webhook 的錯誤紀錄，除錯用 |
 
-想先看看畫面長怎樣，可以執行 `seedDemoData()` 塞 30 天假資料，之後手動刪掉即可。
+`Categories` 的欄位：
+
+| 欄位 | 說明 |
+| --- | --- |
+| `id` | 系統產生，不要手動改（改名時靠它認人） |
+| `type` | `expense` 或 `income` |
+| `name` | 顯示名稱，12 字以內 |
+| `icon` | 任何 emoji |
+| `order` | 排序，小的排前面 |
+| `keywords` | 逗號分隔。LINE 上打到這些字就會自動歸到這一類 |
+| `budget` | 每月預算，0 = 不設定。統計頁會顯示進度條 |
+| `archived` | `TRUE` = 收起來不再出現在選單，但歷史紀錄保留 |
+
+> 這三張表都是**依表頭名稱**對應欄位，不是靠位置。
+> 你可以自己調換欄位順序、或在右邊加自己的欄位，程式不會弄壞它們。
+>
+> 分類平常在**網頁的「設定 → 管理分類」**維護就好（可以挑 emoji、設預算、調順序），
+> 不需要手動編輯這張表。
+
+想先看看畫面長怎樣，可以執行 `seedDemoData()` 塞三個月的假資料
+（統計頁的月度趨勢才有東西可看），之後手動刪掉整批 `source = sheet` 的列即可。
 
 ## 步驟 3：部署成 Web App
 

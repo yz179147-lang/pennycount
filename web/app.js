@@ -1,8 +1,10 @@
 /**
  * PennyCount 前端主程式（無框架，純 DOM）。
- * 資料流：載入月份 → state.records → render 各畫面。所有寫入都會先打後端再更新 state。
+ *
+ * 這個檔案負責：外殼（分頁切換、月份、提示）、記帳頁、紀錄頁、設定頁。
+ * 分類管理在 categories.js，統計頁在 stats.js，它們透過 window.App 取用共用狀態。
  */
-(function () {
+window.App = (function () {
   'use strict';
 
   const $ = function (selector) { return document.querySelector(selector); };
@@ -19,6 +21,9 @@
     editing: null,
     loading: false,
   };
+
+  /** 其他模組把自己註冊進來：{ render(), onShow() } */
+  const views = {};
 
   // ---------- 小工具 ----------
 
@@ -42,6 +47,12 @@
     return '日一二三四五六'[date.getDay()];
   }
 
+  function escapeHtml(text) {
+    return String(text === undefined || text === null ? '' : text).replace(/[&<>"']/g, function (ch) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch];
+    });
+  }
+
   let toastTimer = null;
   function toast(message, kind) {
     const el = $('#toast');
@@ -52,10 +63,19 @@
     toastTimer = setTimeout(function () { el.hidden = true; }, 2600);
   }
 
+  /** 找出某個分類的圖示（找不到就給一個泛用的）。 */
+  function iconOf(type, name) {
+    const match = state.categories.filter(function (c) {
+      return c.type === type && c.name === name;
+    })[0];
+    return (match && match.icon) || (type === 'income' ? '💰' : '📦');
+  }
+
   // ---------- 啟動 ----------
 
   function boot() {
     bindEvents();
+    document.body.dataset.type = state.type;
 
     if (!Api.config.isReady) {
       $('#onboarding').hidden = false;
@@ -75,7 +95,7 @@
 
     await loadCategories();
     await loadMonth();
-    flushOutbox();
+    flushOutbox(true);
   }
 
   async function loadCategories() {
@@ -84,16 +104,17 @@
     } catch (err) {
       // 後端連不上時仍給一組預設分類，至少介面不會空白
       state.categories = [
-        { type: 'expense', name: '餐飲', icon: '🍜' },
-        { type: 'expense', name: '交通', icon: '🚌' },
-        { type: 'expense', name: '購物', icon: '🛍️' },
-        { type: 'expense', name: '其他', icon: '📦' },
-        { type: 'income', name: '薪水', icon: '💼' },
-        { type: 'income', name: '其他', icon: '📦' },
+        { id: '', type: 'expense', name: '餐飲', icon: '🍜', budget: 0, keywords: [] },
+        { id: '', type: 'expense', name: '交通', icon: '🚌', budget: 0, keywords: [] },
+        { id: '', type: 'expense', name: '購物', icon: '🛍️', budget: 0, keywords: [] },
+        { id: '', type: 'expense', name: '其他', icon: '📦', budget: 0, keywords: [] },
+        { id: '', type: 'income', name: '薪水', icon: '💼', budget: 0, keywords: [] },
+        { id: '', type: 'income', name: '其他', icon: '📦', budget: 0, keywords: [] },
       ];
       toast(err.message, 'error');
     }
-    renderCategories();
+    renderCategoryChips();
+    if (views.categories) views.categories.render();
   }
 
   async function loadMonth() {
@@ -102,7 +123,9 @@
     try {
       const result = await Api.listRecords({ month: state.month, limit: 500 });
       state.records = result.items;
-      renderAll();
+      renderSummary();
+      renderRecords();
+      if (state.view === 'stats' && views.stats) views.stats.render();
     } catch (err) {
       toast(err.message, 'error');
     } finally {
@@ -112,7 +135,7 @@
 
   // ---------- 記帳頁 ----------
 
-  function renderCategories() {
+  function renderCategoryChips() {
     const wrap = $('#categories');
     const list = state.categories.filter(function (c) { return c.type === state.type; });
 
@@ -122,10 +145,12 @@
 
     wrap.innerHTML = list.map(function (c) {
       const active = c.name === state.category ? ' is-active' : '';
-      return '<button class="chip' + active + '" data-category="' + escapeAttr(c.name) + '">' +
-        '<span class="chip__icon">' + (c.icon || '🏷️') + '</span>' +
+      return '<button class="chip' + active + '" data-category="' + escapeHtml(c.name) + '">' +
+        '<span class="chip__icon">' + escapeHtml(c.icon || '🏷️') + '</span>' +
         '<span class="chip__name">' + escapeHtml(c.name) + '</span></button>';
-    }).join('');
+    }).join('') +
+      '<button class="chip chip--add" data-add-category="1" aria-label="新增分類">' +
+      '<span class="chip__icon">＋</span><span class="chip__name">新增</span></button>';
   }
 
   function setAmount(next) {
@@ -170,7 +195,9 @@
       const saved = await Api.addRecord(record);
       if (saved.date.slice(0, 7) === state.month) {
         state.records.unshift(saved);
-        renderAll();
+        renderSummary();
+        renderRecords();
+        if (views.stats) views.stats.invalidate();
       }
       toast('已記一筆 ' + (record.type === 'income' ? '收入' : '支出') + ' $' + money(amount));
       resetEntry();
@@ -236,9 +263,8 @@
         (income ? '收 ' + money(income) + '　' : '') + '支 ' + money(expense) + '</span></div>';
 
       const rows = items.map(function (r) {
-        const icon = iconOf(r.type, r.category);
-        return '<button class="row" data-id="' + escapeAttr(r.id) + '">' +
-          '<span class="row__icon">' + icon + '</span>' +
+        return '<button class="row" data-id="' + escapeHtml(r.id) + '">' +
+          '<span class="row__icon">' + escapeHtml(iconOf(r.type, r.category)) + '</span>' +
           '<span class="row__main"><b>' + escapeHtml(r.category) + '</b>' +
           (r.note ? '<small>' + escapeHtml(r.note) + '</small>' : '') + '</span>' +
           '<span class="row__amount ' + (r.type === 'income' ? 'is-income' : 'is-expense') + '">' +
@@ -249,82 +275,19 @@
     }).join('');
   }
 
-  function iconOf(type, name) {
-    const match = state.categories.filter(function (c) {
-      return c.type === type && c.name === name;
-    })[0];
-    return (match && match.icon) || (type === 'income' ? '💰' : '📦');
-  }
-
-  // ---------- 統計頁 ----------
-
-  function totals(records) {
+  function renderSummary() {
     let expense = 0;
     let income = 0;
-    records.forEach(function (r) {
+    state.records.forEach(function (r) {
       if (r.type === 'income') income += r.amount;
       else expense += r.amount;
     });
-    return { expense: expense, income: income, balance: income - expense };
+    $('#sum-expense').textContent = money(expense);
+    $('#sum-income').textContent = money(income);
+    $('#sum-balance').textContent = money(income - expense);
   }
 
-  function renderSummary() {
-    const sum = totals(state.records);
-    $('#sum-expense').textContent = money(sum.expense);
-    $('#sum-income').textContent = money(sum.income);
-    $('#sum-balance').textContent = money(sum.balance);
-    $('#stat-expense').textContent = '$' + money(sum.expense);
-    $('#stat-income').textContent = '$' + money(sum.income);
-    $('#stat-balance').textContent = '$' + money(sum.balance);
-  }
-
-  function renderStats() {
-    const expenses = state.records.filter(function (r) { return r.type === 'expense'; });
-
-    // 每日長條圖
-    const parts = state.month.split('-');
-    const days = new Date(Number(parts[0]), Number(parts[1]), 0).getDate();
-    const perDay = new Array(days).fill(0);
-    expenses.forEach(function (r) {
-      const day = Number(r.date.slice(8, 10));
-      if (day >= 1 && day <= days) perDay[day - 1] += r.amount;
-    });
-    const peak = Math.max.apply(null, perDay.concat([1]));
-
-    $('#daily-chart').innerHTML = perDay.map(function (value, index) {
-      const height = Math.round((value / peak) * 100);
-      const label = (index + 1) + ' 日：$' + money(value);
-      return '<div class="bar" title="' + escapeAttr(label) + '" aria-label="' + escapeAttr(label) + '">' +
-        '<div class="bar__fill" style="height:' + Math.max(value ? 4 : 0, height) + '%"></div></div>';
-    }).join('');
-
-    // 分類佔比
-    const byCategory = {};
-    expenses.forEach(function (r) {
-      byCategory[r.category] = (byCategory[r.category] || 0) + r.amount;
-    });
-    const total = Object.keys(byCategory).reduce(function (acc, key) { return acc + byCategory[key]; }, 0);
-    const sorted = Object.keys(byCategory).sort(function (a, b) { return byCategory[b] - byCategory[a]; });
-
-    $('#category-bars').innerHTML = sorted.length
-      ? sorted.map(function (name) {
-        const amount = byCategory[name];
-        const pct = total ? Math.round((amount / total) * 100) : 0;
-        return '<div class="cat">' +
-          '<div class="cat__head"><span>' + iconOf('expense', name) + ' ' + escapeHtml(name) + '</span>' +
-          '<span>$' + money(amount) + '　' + pct + '%</span></div>' +
-          '<div class="cat__track"><div class="cat__fill" style="width:' + pct + '%"></div></div></div>';
-      }).join('')
-      : '<p class="empty">這個月還沒有支出紀錄。</p>';
-  }
-
-  function renderAll() {
-    renderSummary();
-    renderRecords();
-    renderStats();
-  }
-
-  // ---------- 編輯 ----------
+  // ---------- 編輯單筆 ----------
 
   function openEditor(id) {
     const record = state.records.filter(function (r) { return r.id === id; })[0];
@@ -338,8 +301,8 @@
       .filter(function (c) { return c.type === record.type; })
       .map(function (c) {
         const selected = c.name === record.category ? ' selected' : '';
-        return '<option value="' + escapeAttr(c.name) + '"' + selected + '>' +
-          (c.icon || '') + ' ' + escapeHtml(c.name) + '</option>';
+        return '<option value="' + escapeHtml(c.name) + '"' + selected + '>' +
+          escapeHtml((c.icon || '') + ' ' + c.name) + '</option>';
       }).join('');
 
     $('#sheet').hidden = false;
@@ -371,7 +334,9 @@
         return r.date.slice(0, 7) === state.month;
       });
       closeEditor();
-      renderAll();
+      renderSummary();
+      renderRecords();
+      if (views.stats) views.stats.invalidate();
       toast('已更新');
     } catch (err) {
       toast(err.message, 'error');
@@ -387,7 +352,9 @@
       await Api.deleteRecord(id);
       state.records = state.records.filter(function (r) { return r.id !== id; });
       closeEditor();
-      renderAll();
+      renderSummary();
+      renderRecords();
+      if (views.stats) views.stats.invalidate();
       toast('已刪除');
     } catch (err) {
       toast(err.message, 'error');
@@ -418,16 +385,24 @@
     $$('.view').forEach(function (section) {
       section.hidden = section.dataset.view !== name;
     });
+    // 分類管理是設定的子頁，底部分頁要繼續停在「設定」
+    const activeTab = name === 'categories' ? 'settings' : name;
     $$('.tab').forEach(function (tab) {
-      tab.classList.toggle('is-active', tab.dataset.tab === name);
+      tab.classList.toggle('is-active', tab.dataset.tab === activeTab);
     });
+    if (views[name] && views[name].onShow) views[name].onShow();
   }
 
   function shiftMonth(delta) {
     const parts = state.month.split('-');
     const date = new Date(Number(parts[0]), Number(parts[1]) - 1 + delta, 1);
-    state.month = monthKey(date);
-    $('#month').value = state.month;
+    setMonth(monthKey(date));
+  }
+
+  function setMonth(month) {
+    state.month = month;
+    $('#month').value = month;
+    if (views.stats) views.stats.invalidate();
     loadMonth();
   }
 
@@ -458,22 +433,27 @@
       }
     });
 
-    $$('.type-switch__btn').forEach(function (button) {
+    $$('.type-switch__btn[data-type]').forEach(function (button) {
       button.addEventListener('click', function () {
         state.type = button.dataset.type;
-        $$('.type-switch__btn').forEach(function (b) {
+        $$('.type-switch__btn[data-type]').forEach(function (b) {
           b.classList.toggle('is-active', b === button);
         });
         document.body.dataset.type = state.type;
-        renderCategories();
+        renderCategoryChips();
       });
     });
 
     $('#categories').addEventListener('click', function (event) {
+      if (event.target.closest('[data-add-category]')) {
+        switchView('categories');
+        if (views.categories) views.categories.openNew(state.type);
+        return;
+      }
       const chip = event.target.closest('[data-category]');
       if (!chip) return;
       state.category = chip.dataset.category;
-      renderCategories();
+      renderCategoryChips();
     });
 
     $$('.key').forEach(function (key) {
@@ -486,11 +466,13 @@
       tab.addEventListener('click', function () { switchView(tab.dataset.tab); });
     });
 
+    $('#open-categories').addEventListener('click', function () { switchView('categories'); });
+    $('#categories-back').addEventListener('click', function () { switchView('settings'); });
+
     $('#month-prev').addEventListener('click', function () { shiftMonth(-1); });
     $('#month-next').addEventListener('click', function () { shiftMonth(1); });
     $('#month').addEventListener('change', function () {
-      state.month = $('#month').value || monthKey(new Date());
-      loadMonth();
+      setMonth($('#month').value || monthKey(new Date()));
     });
 
     $('#search').addEventListener('input', renderRecords);
@@ -503,8 +485,8 @@
 
     $('#edit-save').addEventListener('click', submitEdit);
     $('#edit-delete').addEventListener('click', removeEditing);
-    $$('#sheet [data-close]').forEach(function (el) {
-      el.addEventListener('click', closeEditor);
+    $$('#sheet [data-close]').forEach(function (element) {
+      element.addEventListener('click', closeEditor);
     });
 
     $('#cfg-save').addEventListener('click', function () {
@@ -535,18 +517,10 @@
     window.addEventListener('online', function () { flushOutbox(true); });
 
     document.addEventListener('keydown', function (event) {
-      if (event.key === 'Escape' && !$('#sheet').hidden) closeEditor();
+      if (event.key !== 'Escape') return;
+      if (!$('#category-sheet').hidden && views.categories) views.categories.close();
+      else if (!$('#sheet').hidden) closeEditor();
     });
-  }
-
-  function escapeHtml(text) {
-    return String(text).replace(/[&<>"']/g, function (ch) {
-      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch];
-    });
-  }
-
-  function escapeAttr(text) {
-    return escapeHtml(text);
   }
 
   if ('serviceWorker' in navigator) {
@@ -555,6 +529,20 @@
     });
   }
 
-  document.body.dataset.type = state.type;
-  boot();
+  return {
+    boot: boot,
+    state: state,
+    views: views,
+    $: $,
+    $$: $$,
+    money: money,
+    escapeHtml: escapeHtml,
+    iconOf: iconOf,
+    weekdayOf: weekdayOf,
+    toast: toast,
+    switchView: switchView,
+    loadCategories: loadCategories,
+    loadMonth: loadMonth,
+    renderCategoryChips: renderCategoryChips,
+  };
 })();

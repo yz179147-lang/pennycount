@@ -3,18 +3,19 @@
  * 在 Apps Script 編輯器選 setup 然後按「執行」，就會把試算表準備好。
  */
 
-/** 建立工作表、寫入預設分類、產生 API_TOKEN。 */
+/** 建立工作表、寫入預設分類、產生 API_TOKEN。可重複執行，不會弄壞既有資料。 */
 function setup() {
-  getSheet_(CONFIG.SHEET_RECORDS);
-  getSheet_(CONFIG.SHEET_LOGS);
+  const records = getTable_(CONFIG.SHEET_RECORDS, RECORD_FIELDS);
+  records.sheet.setFrozenRows(1);
+  // 日期存文字，避免不同時區開啟時整批位移一天
+  records.sheet.getRange(1, records.index.date + 1, records.sheet.getMaxRows(), 1).setNumberFormat('@');
+  records.sheet.getRange(2, records.index.amount + 1, records.sheet.getMaxRows() - 1, 1).setNumberFormat('#,##0.00');
 
-  const categorySheet = getSheet_(CONFIG.SHEET_CATEGORIES);
-  if (categorySheet.getLastRow() < 2) {
-    const rows = DEFAULT_CATEGORIES.map(function (c) {
-      return CATEGORY_FIELDS.map(function (f) { return c[f]; });
-    });
-    categorySheet.getRange(2, 1, rows.length, CATEGORY_FIELDS.length).setValues(rows);
-  }
+  getTable_(CONFIG.SHEET_LOGS, LOG_FIELDS).sheet.setFrozenRows(1);
+
+  const table = getTable_(CONFIG.SHEET_CATEGORIES, CATEGORY_FIELDS);
+  table.sheet.setFrozenRows(1);
+  seedCategories_(table);
 
   const props = PropertiesService.getScriptProperties();
   if (!props.getProperty('API_TOKEN')) {
@@ -27,7 +28,8 @@ function setup() {
   const summary =
     '安裝完成 ✅\n\n' +
     '試算表：' + getSpreadsheet_().getName() + '\n' +
-    '時區：' + scriptTimeZone_() + '\n\n' +
+    '時區：' + scriptTimeZone_() + '\n' +
+    '分類：' + listCategories().length + ' 個\n\n' +
     'API_TOKEN（前端首次開啟時要輸入）：\n' + props.getProperty('API_TOKEN') + '\n\n' +
     'LINE_HOOK_KEY（webhook 網址的 key 參數）：\n' + props.getProperty('LINE_HOOK_KEY') + '\n\n' +
     '接著到「部署 → 新增部署作業 → 網頁應用程式」，\n' +
@@ -40,6 +42,28 @@ function setup() {
     // 從編輯器直接執行時沒有 UI，忽略即可
   }
   return summary;
+}
+
+/** 寫入預設分類；已經有同名分類就跳過，所以重跑 setup 不會產生重複。 */
+function seedCategories_(table) {
+  const existing = {};
+  readTable_(table).forEach(function (row) {
+    existing[normalizeType_(row.type) + '|' + String(row.name).trim()] = true;
+  });
+
+  DEFAULT_CATEGORIES.forEach(function (category) {
+    if (existing[category.type + '|' + category.name]) return;
+    appendRow_(table, {
+      id: 'c' + newId_().slice(0, 6),
+      type: category.type,
+      name: category.name,
+      icon: category.icon,
+      order: category.order,
+      keywords: (category.keywords || []).join(','),
+      budget: category.budget || 0,
+      archived: false,
+    });
+  });
 }
 
 /** 在試算表上加一個自訂選單，方便日後查金鑰。 */
@@ -65,29 +89,37 @@ function showKeys() {
   SpreadsheetApp.getUi().alert(text);
 }
 
-/** 塞 30 天的假資料，方便驗證前端畫面。 */
+/** 塞三個月的假資料，方便驗證統計圖表。 */
 function seedDemoData() {
   const samples = [
-    ['餐飲', 120, '午餐'], ['餐飲', 65, '早餐'], ['交通', 30, '捷運'],
-    ['購物', 890, '日用品'], ['娛樂', 390, '電影'], ['餐飲', 180, '咖啡'],
-    ['居住', 15000, '房租'], ['交通', 800, '加油'], ['醫療', 450, '看診'],
+    ['餐飲', 120, '午餐'], ['餐飲', 65, '早餐'], ['餐飲', 180, '咖啡'],
+    ['交通', 30, '捷運'], ['交通', 800, '加油'], ['交通', 250, '計程車'],
+    ['購物', 890, '日用品'], ['購物', 1580, '衣服'],
+    ['娛樂', 390, '電影'], ['娛樂', 270, '訂閱'],
+    ['醫療', 450, '看診'], ['教育', 620, '書'],
   ];
-  for (let day = 0; day < 30; day++) {
-    const count = Math.floor(Math.random() * 3);
+
+  for (let day = 0; day < 92; day++) {
+    const date = shiftDays_(-day);
+    const count = Math.floor(Math.random() * 4);
     for (let i = 0; i < count; i++) {
       const sample = samples[Math.floor(Math.random() * samples.length)];
       createRecord({
-        date: shiftDays_(-day),
+        date: date,
         type: 'expense',
         category: sample[0],
-        amount: sample[1],
+        amount: Math.round(sample[1] * (0.7 + Math.random() * 0.6)),
         note: sample[2],
       }, { source: 'sheet', user: 'demo' });
     }
+    // 每月 5 號房租與薪水
+    if (date.slice(8) === '05') {
+      createRecord({ date: date, type: 'expense', category: '居住', amount: 15000, note: '房租' },
+        { source: 'sheet', user: 'demo' });
+      createRecord({ date: date, type: 'income', category: '薪水', amount: 52000, note: '月薪' },
+        { source: 'sheet', user: 'demo' });
+    }
   }
-  createRecord({
-    date: shiftDays_(-15), type: 'income', category: '薪水', amount: 52000, note: '月薪',
-  }, { source: 'sheet', user: 'demo' });
 }
 
 /** 不必部署就能驗證後端邏輯：在編輯器執行，看「執行紀錄」。 */
@@ -100,6 +132,9 @@ function runSelfTest() {
     '9/1 房租 15000',
     '#教育 1200 線上課程',
     '本月',
+    '分類',
+    '新增分類 🍔 早午餐',
+    '預算 餐飲 8000',
     '刪除 abcd1234',
     '哈囉',
   ];
@@ -112,7 +147,7 @@ function runSelfTest() {
     { source: 'sheet', user: 'self-test' }
   );
   console.log('created: ' + JSON.stringify(created));
-  console.log('summary: ' + JSON.stringify(summarize({})));
+  console.log('analytics: ' + JSON.stringify(analytics({}).totals));
   console.log('deleted: ' + JSON.stringify(deleteRecord(created.id)));
   console.log('✅ self test passed');
 }

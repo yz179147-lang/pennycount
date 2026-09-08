@@ -49,17 +49,41 @@ function shiftDays_(days) {
   return formatDate_(d);
 }
 
+function currentMonth_() {
+  return Utilities.formatDate(new Date(), scriptTimeZone_(), 'yyyy-MM');
+}
+
 /** 這個月的第一天／最後一天。 */
 function monthRange_(yyyymm) {
-  const ym = yyyymm || Utilities.formatDate(new Date(), scriptTimeZone_(), 'yyyy-MM');
-  const parts = ym.split('-');
-  const year = Number(parts[0]);
-  const month = Number(parts[1]);
-  const last = new Date(year, month, 0).getDate();
+  const ym = yyyymm || currentMonth_();
   return {
     from: ym + '-01',
-    to: ym + '-' + String(last).padStart(2, '0'),
+    to: ym + '-' + String(daysInMonth_(ym)).padStart(2, '0'),
   };
+}
+
+/** 該月有幾天。 */
+function daysInMonth_(yyyymm) {
+  const parts = String(yyyymm || currentMonth_()).split('-');
+  return new Date(Number(parts[0]), Number(parts[1]), 0).getDate();
+}
+
+/** yyyy-MM 往前／往後推 n 個月。 */
+function shiftMonth_(yyyymm, delta) {
+  const parts = String(yyyymm || currentMonth_()).split('-');
+  const date = new Date(Number(parts[0]), Number(parts[1]) - 1 + Number(delta), 1);
+  return date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0');
+}
+
+/** yyyy-MM-dd 是星期幾（0 = 週日）。不經過時區，純粹算日期。 */
+function weekdayOf_(dateText) {
+  const parts = String(dateText).split('-');
+  return new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2])).getDay();
+}
+
+/** 金額統一保留兩位小數，避免浮點數尾數跑出來。 */
+function round2_(value) {
+  return Math.round((Number(value) || 0) * 100) / 100;
 }
 
 /**

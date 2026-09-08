@@ -103,20 +103,16 @@
 
     <!-- 統計 -->
     <section class="view" data-view="stats" hidden>
-      <div class="cards">
-        <div class="card"><span class="card__label">支出</span><b id="stat-expense" class="card__value card__value--expense">-</b></div>
-        <div class="card"><span class="card__label">收入</span><b id="stat-income" class="card__value card__value--income">-</b></div>
-        <div class="card"><span class="card__label">結餘</span><b id="stat-balance" class="card__value">-</b></div>
-      </div>
-      <h2 class="section-title">每日支出</h2>
-      <div id="daily-chart" class="daily-chart"></div>
-      <h2 class="section-title">分類佔比</h2>
-      <div id="category-bars" class="category-bars"></div>
+      <div id="stats-body" class="stats"></div>
     </section>
 
     <!-- 設定 -->
     <section class="view" data-view="settings" hidden>
       <div class="settings">
+        <button id="open-categories" class="settings__link">
+          <span>🏷️ 管理分類</span><span class="settings__link-hint">新增、改名、換圖示、設預算 ›</span>
+        </button>
+        <hr>
         <label class="field">
           <span>後端網址</span>
           <input id="cfg-url" type="url" inputmode="url" autocomplete="off">
@@ -137,6 +133,22 @@
         <p class="muted">在 iPhone 上：Safari 開啟此頁 → 分享 → 加入主畫面，就能像 App 一樣使用。</p>
         <button id="cfg-reset" class="btn btn--danger">清除本機設定</button>
       </div>
+    </section>
+
+    <!-- 分類管理 -->
+    <section class="view" data-view="categories" hidden>
+      <div class="subhead">
+        <button id="categories-back" class="subhead__back" aria-label="返回">‹ 設定</button>
+        <h2 class="subhead__title">管理分類</h2>
+      </div>
+      <div class="type-switch" role="tablist">
+        <button class="type-switch__btn is-active" data-cattype="expense" role="tab">支出分類</button>
+        <button class="type-switch__btn" data-cattype="income" role="tab">收入分類</button>
+      </div>
+      <div id="category-manager" class="category-manager"></div>
+      <button id="category-add" class="btn btn--primary btn--save">＋ 新增分類</button>
+      <p class="muted hint">拖不動？用每列右邊的 ↑ ↓ 調整順序，順序會同步到記帳畫面。<br>
+        刪除分類時，原本的紀錄會自動改成「其他」，不會消失。</p>
     </section>
   </main>
 
@@ -165,9 +177,55 @@
   </div>
 </div>
 
+<!-- 新增／編輯分類 -->
+<div id="category-sheet" class="sheet" hidden>
+  <div class="sheet__backdrop" data-close></div>
+  <div class="sheet__panel" role="dialog" aria-modal="true" aria-label="分類設定">
+    <h2 id="category-sheet-title" class="sheet__title">新增分類</h2>
+
+    <div class="icon-row">
+      <button id="icon-preview" class="icon-preview" aria-label="目前圖示">🏷️</button>
+      <label class="field field--grow">
+        <span>分類名稱</span>
+        <input id="category-name" type="text" maxlength="12" placeholder="例如：早午餐">
+      </label>
+    </div>
+
+    <div class="field">
+      <span>選一個圖示</span>
+      <div class="emoji-tabs" id="emoji-tabs"></div>
+      <div class="emoji-grid" id="emoji-grid"></div>
+      <input id="category-icon" type="text" maxlength="8" class="emoji-input"
+             placeholder="或直接貼上任何 emoji" aria-label="自訂圖示">
+    </div>
+
+    <label class="field">
+      <span>每月預算（選填，0 = 不設定）</span>
+      <input id="category-budget" type="number" inputmode="numeric" min="0" step="100" placeholder="0">
+    </label>
+
+    <label class="field">
+      <span>LINE 關鍵字（選填，逗號分隔）</span>
+      <input id="category-keywords" type="text" placeholder="例如：蛋餅, 三明治, brunch">
+      <small class="field__hint">在 LINE 打「蛋餅 55」就會自動歸到這一類。</small>
+    </label>
+
+    <p id="category-error" class="error" hidden></p>
+    <div class="sheet__actions">
+      <button id="category-delete" class="btn btn--danger" hidden>刪除</button>
+      <button id="category-cancel" class="btn" data-close>取消</button>
+      <button id="category-save" class="btn btn--primary">儲存</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast" class="toast" hidden></div>
 
 <script src="api.js"></script>
+<script src="charts.js"></script>
 <script src="app.js"></script>
+<script src="categories.js"></script>
+<script src="stats.js"></script>
+<script>App.boot();</script>
 </body>
 </html>

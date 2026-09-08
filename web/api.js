@@ -105,13 +105,20 @@ const Api = (function () {
     config: config,
 
     ping: function () { return get('ping'); },
-    listCategories: function () { return get('listCategories'); },
     listRecords: function (filter) { return get('listRecords', filter); },
     summary: function (filter) { return get('summary', filter); },
+    analytics: function (filter) { return get('analytics', filter); },
 
     addRecord: function (record) { return write('addRecord', record, { queueable: true }); },
     updateRecord: function (id, patch) { return write('updateRecord', Object.assign({ id: id }, patch)); },
     deleteRecord: function (id) { return write('deleteRecord', { id: id }); },
+
+    listCategories: function () { return get('listCategories'); },
+    categoryUsage: function () { return get('categoryUsage'); },
+    addCategory: function (category) { return write('addCategory', category); },
+    updateCategory: function (id, patch) { return write('updateCategory', Object.assign({ id: id }, patch)); },
+    deleteCategory: function (id, reassignTo) { return write('deleteCategory', { id: id, reassignTo: reassignTo }); },
+    reorderCategories: function (ids) { return write('reorderCategories', { ids: ids }); },
 
     outboxSize: function () { return readOutbox().length; },
 
