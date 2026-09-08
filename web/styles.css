@@ -55,46 +55,108 @@
   --chart-axis: #E2D5F0;
   --chart-label: #796E84;
   --chart-label-strong: #322A3D;
+
+  /* 深色調色盤：值只寫這一次，下面兩個 scope 只負責「套用」 */
+  --d-bg: #17131D;
+  --d-surface: #221B2B;
+  --d-surface-soft: #261D2F;
+  --d-surface-2: #2E2439;
+  --d-icon-bg: #3A2C4A;
+  --d-pink-soft: #4A2B3C;
+  --d-line: #352A42;
+  --d-text: #F2ECF7;
+  --d-muted: #AA9EB6;
+  --d-accent: #C9A5EA;
+  --d-accent-soft: #A77BD7;
+  --d-grad-a: #8A5FC0;
+  --d-grad-b: #D78EAF;
+  --d-grad-ink-a: #7E52B4;
+  --d-grad-ink-b: #B25585;
+  --d-expense: #F08BB0;
+  --d-income: #4FC0A2;
+  --d-status-good: #4FC0A2;
+  --d-status-warning: #E8A93B;
+  --d-status-critical: #E86A6A;
+  --d-chart-fill: #C9A5EA;
+  --d-chart-bar: #7A6A8C;
+  --d-chart-grid: #2B2235;
+  --d-chart-axis: #3C3049;
 }
 
+/*
+ * 主題有三種狀態：
+ * - 跟隨系統（沒有 data-theme）：靠下面的 media query
+ * - 使用者選淺色（data-theme="light"）：media query 被 :not() 擋掉
+ * - 使用者選深色（data-theme="dark"）：不管系統設定都套深色
+ */
 @media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #17131D;
-    --surface: #221B2B;
-    --surface-soft: #261D2F;
-    --surface-2: #2E2439;
-    --icon-bg: #3A2C4A;
-    --pink-soft: #4A2B3C;
-    --line: #352A42;
-
-    --text: #F2ECF7;
-    --muted: #AA9EB6;
-    --muted-soft: #AA9EB6;
-
-    --accent: #C9A5EA;
-    --accent-soft: #A77BD7;
-    --grad-a: #8A5FC0;
-    --grad-b: #D78EAF;
-    --grad-ink-a: #7E52B4;
-    --grad-ink-b: #B25585;
-
-    --expense: #F08BB0;
-    --expense-ink: #F08BB0;
-    --income: #4FC0A2;
-    --income-ink: #4FC0A2;
-
-    --status-good: #4FC0A2;
-    --status-warning: #E8A93B;
-    --status-critical: #E86A6A;
-
-    --chart-fill: #C9A5EA;
-    --chart-bar: #7A6A8C;
-    --chart-grid: #2B2235;
-    --chart-axis: #3C3049;
-    --chart-label: #AA9EB6;
-    --chart-label-strong: #F2ECF7;
+  :root:not([data-theme="light"]) {
+    --bg: var(--d-bg);
+    --surface: var(--d-surface);
+    --surface-soft: var(--d-surface-soft);
+    --surface-2: var(--d-surface-2);
+    --icon-bg: var(--d-icon-bg);
+    --pink-soft: var(--d-pink-soft);
+    --line: var(--d-line);
+    --text: var(--d-text);
+    --muted: var(--d-muted);
+    --muted-soft: var(--d-muted);
+    --accent: var(--d-accent);
+    --accent-soft: var(--d-accent-soft);
+    --grad-a: var(--d-grad-a);
+    --grad-b: var(--d-grad-b);
+    --grad-ink-a: var(--d-grad-ink-a);
+    --grad-ink-b: var(--d-grad-ink-b);
+    --expense: var(--d-expense);
+    --expense-ink: var(--d-expense);
+    --income: var(--d-income);
+    --income-ink: var(--d-income);
+    --status-good: var(--d-status-good);
+    --status-warning: var(--d-status-warning);
+    --status-critical: var(--d-status-critical);
+    --chart-fill: var(--d-chart-fill);
+    --chart-bar: var(--d-chart-bar);
+    --chart-grid: var(--d-chart-grid);
+    --chart-axis: var(--d-chart-axis);
+    --chart-label: var(--d-muted);
+    --chart-label-strong: var(--d-text);
   }
 }
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: var(--d-bg);
+  --surface: var(--d-surface);
+  --surface-soft: var(--d-surface-soft);
+  --surface-2: var(--d-surface-2);
+  --icon-bg: var(--d-icon-bg);
+  --pink-soft: var(--d-pink-soft);
+  --line: var(--d-line);
+  --text: var(--d-text);
+  --muted: var(--d-muted);
+  --muted-soft: var(--d-muted);
+  --accent: var(--d-accent);
+  --accent-soft: var(--d-accent-soft);
+  --grad-a: var(--d-grad-a);
+  --grad-b: var(--d-grad-b);
+  --grad-ink-a: var(--d-grad-ink-a);
+  --grad-ink-b: var(--d-grad-ink-b);
+  --expense: var(--d-expense);
+  --expense-ink: var(--d-expense);
+  --income: var(--d-income);
+  --income-ink: var(--d-income);
+  --status-good: var(--d-status-good);
+  --status-warning: var(--d-status-warning);
+  --status-critical: var(--d-status-critical);
+  --chart-fill: var(--d-chart-fill);
+  --chart-bar: var(--d-chart-bar);
+  --chart-grid: var(--d-chart-grid);
+  --chart-axis: var(--d-chart-axis);
+  --chart-label: var(--d-muted);
+  --chart-label-strong: var(--d-text);
+}
+
+:root[data-theme="light"] { color-scheme: light; }
 
 * { box-sizing: border-box; }
 
@@ -447,6 +509,41 @@ body[data-type="income"] .amount__value { color: var(--income); }
 .note-row__head b { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .note-row__track { height: 6px; background: var(--surface-2); border-radius: 999px; overflow: hidden; }
 .note-row__fill { height: 100%; background: var(--chart-fill); border-radius: 999px; }
+
+/* ---------- 三段式切換（外觀模式） ---------- */
+
+.seg {
+  position: relative;
+  display: flex;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: .2rem;
+  isolation: isolate;
+}
+.seg__thumb {
+  position: absolute;
+  z-index: -1;
+  top: .2rem;
+  bottom: .2rem;
+  left: .2rem;
+  width: calc((100% - .4rem) / 3);
+  background: var(--surface);
+  border-radius: 999px;
+  box-shadow: 0 1px 4px rgb(50 42 61 / .16);
+  transition: transform .2s ease;
+}
+.seg__btn {
+  flex: 1;
+  border: 0;
+  background: transparent;
+  border-radius: 999px;
+  padding: .45rem .2rem;
+  font-size: .875rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+.seg__btn.is-active { color: var(--accent); }
 
 /* ---------- 設定 ---------- */
 

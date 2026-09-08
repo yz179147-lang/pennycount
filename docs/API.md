@@ -9,16 +9,12 @@
 
 ## 呼叫方式
 
-**唯讀（GET）**：`ping`、`listRecords`、`getRecord`、`listCategories`、`categoryUsage`、
-`summary`、`analytics`
+**一律用 POST**，body 是 JSON 字串，`Content-Type` 必須是 `text/plain`——Apps Script
+不回應 CORS preflight，只有簡單請求打得進去：
 
-```
-GET /exec?action=listRecords&token=<API_TOKEN>&month=2026-09
-```
-
-**寫入（POST）**：其餘 action 一律走 POST，body 是 JSON 字串。
-從瀏覽器呼叫時 **`Content-Type` 必須是 `text/plain`**——Apps Script 不回應 CORS
-preflight，只有簡單請求打得進去：
+> 讀取原本可以用 GET，但那會把存取碼帶進網址，於是它會留在瀏覽器歷史紀錄、
+> Apps Script 的執行紀錄，以及你截圖或分享畫面的時候。前端現在一律走 POST。
+> 後端仍接受 GET 讀取（方便用瀏覽器除錯），但**正式使用不要這樣打**。
 
 ```js
 await fetch(url, {
@@ -139,6 +135,15 @@ curl -L -X POST "$EXEC_URL" \
 ```
 
 一次呼叫就足以畫出整個統計頁，前端不需要再自己撈全部紀錄來算。
+
+## 讀取快取
+
+`listRecords`、`analytics`、`listCategories`、`categoryUsage` 的結果會用
+`CacheService` 快取 45 秒，避免同一頁面重複掃整張試算表。
+
+任何寫入（網頁或 LINE）都會換掉一個內部版本號，等同於立刻讓所有快取失效，
+所以在 LINE 記完帳、切回網頁不會看到舊數字。唯一會延遲最多 45 秒的情況是
+**直接在試算表裡手動改資料**。
 
 ## 錯誤碼
 

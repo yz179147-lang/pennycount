@@ -160,17 +160,33 @@ function allRecords_() {
 /**
  * 查詢紀錄。
  * filter: { from, to, month, type, category, keyword, limit, offset }
+ *
+ * 先把條件正規化再當作快取鍵，這樣 { month:'2026-09' } 和對應的
+ * { from, to } 會命中同一份快取。
  */
 function queryRecords(filter) {
   const opts = filter || {};
 
   // 給了 month（yyyy-MM）就換算成該月的起訖，from/to 優先
   const month = (!opts.from && !opts.to && opts.month) ? monthRange_(opts.month) : null;
-  const from = opts.from ? normalizeDate_(opts.from) : (month ? month.from : null);
-  const to = opts.to ? normalizeDate_(opts.to) : (month ? month.to : null);
-  const type = opts.type ? normalizeType_(opts.type) : null;
-  const category = opts.category || null;
-  const keyword = opts.keyword ? String(opts.keyword).toLowerCase() : null;
+  const key = {
+    from: opts.from ? normalizeDate_(opts.from) : (month ? month.from : null),
+    to: opts.to ? normalizeDate_(opts.to) : (month ? month.to : null),
+    type: opts.type ? normalizeType_(opts.type) : null,
+    category: opts.category || null,
+    keyword: opts.keyword ? String(opts.keyword).toLowerCase() : null,
+    limit: Math.min(CONFIG.MAX_PAGE_SIZE, Math.max(1, Number(opts.limit) || CONFIG.MAX_PAGE_SIZE)),
+    offset: Math.max(0, Number(opts.offset) || 0),
+  };
+  return withCache_('records', key, function () { return queryRecords_(key); });
+}
+
+function queryRecords_(opts) {
+  const from = opts.from;
+  const to = opts.to;
+  const type = opts.type;
+  const category = opts.category;
+  const keyword = opts.keyword;
 
   const filtered = allRecords_().filter(function (r) {
     if (from && r.date < from) return false;
@@ -184,14 +200,11 @@ function queryRecords(filter) {
     return true;
   });
 
-  const offset = Math.max(0, Number(opts.offset) || 0);
-  const limit = Math.min(CONFIG.MAX_PAGE_SIZE, Math.max(1, Number(opts.limit) || CONFIG.MAX_PAGE_SIZE));
-
   return {
-    items: filtered.slice(offset, offset + limit),
+    items: filtered.slice(opts.offset, opts.offset + opts.limit),
     total: filtered.length,
-    offset: offset,
-    limit: limit,
+    offset: opts.offset,
+    limit: opts.limit,
   };
 }
 
@@ -310,6 +323,12 @@ function sortCategories_(list) {
  */
 function listCategories(options) {
   const opts = options || {};
+  return withCache_('categories', { includeArchived: !!opts.includeArchived }, function () {
+    return listCategories_(opts);
+  });
+}
+
+function listCategories_(opts) {
   const rows = readTable_(categoryTable_())
     .map(toCategory_)
     .filter(function (c) { return c.name !== ''; });
@@ -490,6 +509,10 @@ function normalizeKeywords_(input) {
 
 /** 每個分類目前有幾筆紀錄（刪除前提醒用）。 */
 function categoryUsage() {
+  return withCache_('categoryUsage', {}, function () { return categoryUsage_(); });
+}
+
+function categoryUsage_() {
   const counts = {};
   allRecords_().forEach(function (r) {
     const key = r.type + '|' + r.category;
@@ -550,8 +573,13 @@ function summarize(filter) {
 function analytics(options) {
   const opts = options || {};
   const month = opts.month || currentMonth_();
-  const monthsBack = Math.min(24, Math.max(2, Number(opts.months) || 6));
+  const monthsBack = Math.min(24, Math.max(2, Number(opts.months) || CONFIG.ANALYTICS_MONTHS));
+  return withCache_('analytics', { month: month, months: monthsBack }, function () {
+    return analytics_(month, monthsBack);
+  });
+}
 
+function analytics_(month, monthsBack) {
   const range = monthRange_(month);
   const firstMonth = shiftMonth_(month, -(monthsBack - 1));
   const windowFrom = monthRange_(firstMonth).from;
@@ -781,14 +809,74 @@ function budgetProgress_(records, categories) {
 
 // ---------------------------------------------------------------- 共用
 
-/** 寫入時上鎖，避免網頁與 LINE 同時 append 撞在一起。 */
+/**
+ * 讀取快取。
+ *
+ * 每次查詢都要把整張 Records 讀進來，開一次統計頁就掃兩遍（紀錄 + 統計）。
+ * 這裡用 CacheService 把「算好的結果」存起來，並用一個版本號當作總開關：
+ * 任何寫入都換一個新版本，舊的快取鍵自然就再也不會被命中，
+ * 所以在 LINE 記完帳，網頁不會讀到過期的數字。
+ */
+function cacheVersion_() {
+  const cache = CacheService.getScriptCache();
+  let version = cache.get(CONFIG.CACHE_VERSION_KEY);
+  if (!version) {
+    version = newVersionId_();
+    cache.put(CONFIG.CACHE_VERSION_KEY, version, CONFIG.CACHE_VERSION_TTL);
+  }
+  return version;
+}
+
+/** 資料變了就換版本號，等同於清掉所有讀取快取。 */
+function invalidateCache_() {
+  CacheService.getScriptCache()
+    .put(CONFIG.CACHE_VERSION_KEY, newVersionId_(), CONFIG.CACHE_VERSION_TTL);
+}
+
+/**
+ * 版本號一定要是新的值。
+ * 這裡不能用 Date.now()：同一毫秒內完成的兩次寫入會拿到相同的版本號，
+ * 舊快取就不會失效（實測會生出重複的分類）。
+ */
+function newVersionId_() {
+  return Utilities.getUuid();
+}
+
+/** 有快取就用快取，沒有就算一次再存起來。 */
+function withCache_(name, keyParts, producer) {
+  const cache = CacheService.getScriptCache();
+  const key = name + ':' + cacheVersion_() + ':' + JSON.stringify(keyParts);
+
+  try {
+    const hit = cache.get(key);
+    if (hit) return JSON.parse(hit);
+  } catch (err) {
+    console.error('快取讀取失敗，改用即時計算：' + err);
+  }
+
+  const value = producer();
+  try {
+    const text = JSON.stringify(value);
+    // CacheService 單一項目上限 100KB，超過就不快取（下次照樣即時算）
+    if (text.length < CONFIG.CACHE_MAX_BYTES) {
+      cache.put(key, text, CONFIG.CACHE_TTL);
+    }
+  } catch (err) {
+    console.error('快取寫入失敗（不影響結果）：' + err);
+  }
+  return value;
+}
+
+/** 寫入時上鎖，避免網頁與 LINE 同時 append 撞在一起。順便讓讀取快取失效。 */
 function withLock_(fn) {
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(20000)) {
     throw ApiError('BUSY', '系統忙碌中，請稍後再試');
   }
   try {
-    return fn();
+    const result = fn();
+    invalidateCache_();
+    return result;
   } finally {
     lock.releaseLock();
   }

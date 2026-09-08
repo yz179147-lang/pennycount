@@ -2,11 +2,30 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="utf-8">
+<!--
+  內容安全政策：GitHub Pages 沒辦法自訂 HTTP header，改用 meta 宣告。
+  預設全部禁止，只開這個 App 真的會用到的來源；connect-src 限定
+  Apps Script 的兩個網域（/exec 會 302 轉到 googleusercontent.com）。
+  萬一哪天有 XSS，攻擊者也無法把存取碼送去別的地方。
+  style-src 留 'unsafe-inline' 是因為長條圖的寬度是行內樣式算出來的；
+  行內樣式的風險遠低於行內腳本，腳本維持 'self'。
+-->
+<meta http-equiv="Content-Security-Policy" content="
+  default-src 'none';
+  script-src 'self';
+  style-src 'self' 'unsafe-inline';
+  img-src 'self';
+  font-src 'self';
+  connect-src 'self' https://script.google.com https://script.googleusercontent.com;
+  manifest-src 'self';
+  worker-src 'self';
+  base-uri 'none';
+  form-action 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
 <title>PennyCount 記帳</title>
 <meta name="description" content="用 Google Sheet 當資料庫的輕量記帳工具">
-<meta name="theme-color" content="#17131D" media="(prefers-color-scheme: dark)">
-<meta name="theme-color" content="#F8F2FB" media="(prefers-color-scheme: light)">
+<!-- 手動切換主題時，這個標籤的 content 會由 app.js 改寫 -->
+<meta id="theme-color" name="theme-color" content="#F8F2FB">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -14,6 +33,7 @@
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="icon" href="icons/icon-192.png">
 <link rel="stylesheet" href="styles.css">
+<script src="theme-boot.js"></script>
 </head>
 <body>
 
@@ -109,6 +129,17 @@
     <!-- 設定 -->
     <section class="view" data-view="settings" hidden>
       <div class="settings">
+        <div class="field">
+          <span>外觀</span>
+          <div id="theme-switch" class="seg" role="radiogroup" aria-label="外觀模式">
+            <span class="seg__thumb" aria-hidden="true"></span>
+            <button class="seg__btn" data-theme-choice="auto" role="radio" aria-checked="true">自動</button>
+            <button class="seg__btn" data-theme-choice="light" role="radio" aria-checked="false">淺色</button>
+            <button class="seg__btn" data-theme-choice="dark" role="radio" aria-checked="false">深色</button>
+          </div>
+          <small class="field__hint">「自動」會跟著手機的深色模式設定切換。</small>
+        </div>
+        <hr>
         <button id="open-categories" class="settings__link">
           <span>🏷️ 管理分類</span><span class="settings__link-hint">新增、改名、換圖示、設預算 ›</span>
         </button>
@@ -226,6 +257,6 @@
 <script src="app.js"></script>
 <script src="categories.js"></script>
 <script src="stats.js"></script>
-<script>App.boot();</script>
+<script src="boot.js"></script>
 </body>
 </html>

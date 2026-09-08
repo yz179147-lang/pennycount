@@ -94,6 +94,9 @@ LINE_HOOK_KEY（webhook 網址的 key 參數）：xxxxxxxx
 ⚠️ **之後每次改後端程式碼，都要「部署 → 管理部署作業 → 編輯（鉛筆）→ 版本選『新版本』→ 部署」，
 否則線上跑的還是舊版。**
 
+> 只改指令碼屬性（`API_TOKEN`、`LINE_ALLOWED_USER_IDS`…）不用重新部署，
+> 那些是執行時才讀的。
+
 ## 步驟 4：發佈前端
 
 ### 方式 A：GitHub Pages（推薦，iPhone 要用這個）

@@ -285,6 +285,9 @@ const server = http.createServer((req, res) => {
     colorScheme: 'dark',
     isMobile: true,
     hasTouch: true,
+    // Playwright 的 waitForFunction 內部用 eval，會被本頁的 CSP 擋掉；
+    // 主流程先繞過，CSP 本身另外用一個沒繞過的 context 實際驗證（見最後）。
+    bypassCSP: true,
   });
 
   const errors = [];
@@ -292,6 +295,12 @@ const server = http.createServer((req, res) => {
 
   const page = await context.newPage();
   page.on('console', (m) => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
+
+  // 記下所有打到後端的請求，之後檢查網址裡不會出現存取碼
+  const apiCalls = [];
+  page.on('request', (r) => {
+    if (r.url().includes('/exec')) apiCalls.push({ method: r.method(), url: r.url() });
+  });
   const shot = (name) => page.screenshot({ path: path.join(SHOTS, name + '.png') });
 
 
@@ -427,6 +436,65 @@ const server = http.createServer((req, res) => {
   await page.waitForSelector('.record-list .row');
   const afterDelete = await page.textContent('#record-list');
 
+  // 8.5) 外觀切換：自動 / 淺色 / 深色
+  await page.click('.tab[data-tab="settings"]');
+  await page.waitForSelector('#theme-switch');
+  const themeAuto = await page.evaluate(() => ({
+    attr: document.documentElement.dataset.theme || null,
+    bg: getComputedStyle(document.body).backgroundColor,
+  }));
+
+  await page.click('[data-theme-choice="light"]');
+  await page.waitForTimeout(120);
+  const themeLight = await page.evaluate(() => ({
+    attr: document.documentElement.dataset.theme,
+    bg: getComputedStyle(document.body).backgroundColor,
+    meta: document.getElementById('theme-color').getAttribute('content'),
+    stored: localStorage.getItem('pennycount.theme'),
+  }));
+  await shot('9-theme-light-on-dark-device');
+
+  await page.click('[data-theme-choice="dark"]');
+  await page.waitForTimeout(120);
+  const themeDark = await page.evaluate(() => ({
+    attr: document.documentElement.dataset.theme,
+    bg: getComputedStyle(document.body).backgroundColor,
+    meta: document.getElementById('theme-color').getAttribute('content'),
+  }));
+
+  // 重新載入之後選擇要留著，而且不能先閃一下淺色（inline script 在首次繪製前就套用）
+  await page.reload();
+  await page.waitForSelector('#app:not([hidden])');
+  const themeAfterReload = await page.evaluate(() => document.documentElement.dataset.theme);
+
+  await page.click('.tab[data-tab="settings"]');
+  await page.click('[data-theme-choice="auto"]');
+  await page.waitForTimeout(120);
+  const themeBackToAuto = await page.evaluate(() => ({
+    attr: document.documentElement.dataset.theme || null,
+    stored: localStorage.getItem('pennycount.theme'),
+    bg: getComputedStyle(document.body).backgroundColor,
+  }));
+
+  // 8.6) 回到前景自動重新整理：模擬在 LINE 記了一筆之後切回 App
+  db.push({
+    id: 'line0001', date: month + '-09', type: 'expense', category: '餐飲',
+    amount: 66, note: '從LINE記的', payment: '', source: 'line', user: '',
+    createdAt: '', updatedAt: '',
+  });
+  await page.click('.tab[data-tab="records"]');
+  const beforeForeground = (await page.textContent('#record-list')).includes('從LINE記的');
+
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true });
+    document.dispatchEvent(new Event('visibilitychange'));
+    Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  await page.waitForFunction(() =>
+    document.querySelector('#record-list').textContent.includes('從LINE記的'), null, { timeout: 5000 });
+  const afterForeground = (await page.textContent('#record-list')).includes('從LINE記的');
+
   // 9) 淺色模式的統計頁
   const light = await context.newPage();
   await light.emulateMedia({ colorScheme: 'light' });
@@ -444,6 +512,28 @@ const server = http.createServer((req, res) => {
   await light.click('#open-categories');
   await light.waitForSelector('.cat-row');
   await light.screenshot({ path: path.join(SHOTS, '11-categories-light.png') });
+
+  // 10) CSP 真的有在擋：用沒有 bypassCSP 的 context 試著注入一段 inline script
+  const strict = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const strictPage = await strict.newPage();
+  const cspViolations = [];
+  strictPage.on('console', (m) => {
+    if (m.type() === 'error' && /Content Security Policy/.test(m.text())) cspViolations.push(m.text());
+  });
+  await strictPage.goto('http://localhost:4321/index.html');
+  await strictPage.waitForTimeout(300);
+  const injected = await strictPage.evaluate(() => {
+    const script = document.createElement('script');
+    script.textContent = 'window.__xssRan = true;';
+    document.head.appendChild(script);
+    return window.__xssRan === true;
+  });
+  const cspMeta = await strictPage.evaluate(() => {
+    const meta = document.querySelector('meta[http-equiv="Content-Security-Policy"]');
+    return meta ? meta.getAttribute('content').replace(/\s+/g, ' ') : '';
+  });
+  const appStillWorks = await strictPage.evaluate(() => typeof window.App === 'object');
+  await strict.close();
 
   const results = {
     '亂填網址會擋下': errVisible === true,
@@ -469,6 +559,22 @@ const server = http.createServer((req, res) => {
     '＋新增開啟編輯器': /新增/.test(opensNew),
     '收入分類是另一組': incomeRows.some((n) => n.includes('薪水')) && !incomeRows.some((n) => n.includes('餐飲')),
     '刪除分類後紀錄改成其他': !/娛樂/.test(afterDelete) && /其他/.test(afterDelete),
+    '外觀：自動時不寫 data-theme': themeAuto.attr === null,
+    '外觀：選淺色會蓋掉系統深色': themeLight.attr === 'light' && themeLight.bg === 'rgb(248, 242, 251)',
+    '外觀：淺色會存起來': themeLight.stored === 'light',
+    '外觀：狀態列顏色跟著換': themeLight.meta === '#F8F2FB' && themeDark.meta === '#17131D',
+    '外觀：選深色會套深底': themeDark.attr === 'dark' && themeDark.bg === 'rgb(23, 19, 29)',
+    '外觀：重新載入後保留選擇': themeAfterReload === 'dark',
+    '外觀：切回自動會清掉設定': themeBackToAuto.attr === null && themeBackToAuto.stored === null,
+    '外觀：自動時跟著系統（此裝置為深色）': themeBackToAuto.bg === 'rgb(23, 19, 29)',
+    '所有 API 都走 POST': apiCalls.length > 0 && apiCalls.every((c) => c.method === 'POST'),
+    '網址不再帶存取碼': apiCalls.every((c) => !c.url.includes('token')),
+    '切回前景前看不到 LINE 那筆': beforeForeground === false,
+    '切回前景會自動刷新': afterForeground === true,
+    'CSP：inline script 被擋下': injected === false && cspViolations.length > 0,
+    'CSP：連線來源限定 Apps Script': /connect-src 'self' https:\/\/script\.google\.com/.test(cspMeta),
+    'CSP：腳本只能來自本站': /script-src 'self'/.test(cspMeta) && !/unsafe-inline;?\s*(img|connect|manifest|worker|script)/.test(cspMeta.replace("style-src 'self' 'unsafe-inline'", '')),
+    'CSP：App 在嚴格模式下仍正常啟動': appStillWorks === true,
     '沒有 JS 錯誤': errors.length === 0,
   };
 

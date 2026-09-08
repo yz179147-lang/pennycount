@@ -19,6 +19,15 @@ const CONFIG = {
 
   /** 統計預設往回看幾個月。 */
   ANALYTICS_MONTHS: 6,
+
+  /**
+   * 讀取快取。任何寫入都會換掉版本號讓舊快取失效，
+   * 所以這個 TTL 只影響「直接在試算表裡手動改資料」多久之後才會反映出來。
+   */
+  CACHE_VERSION_KEY: 'pennycount.dataVersion',
+  CACHE_TTL: 45,            // 秒
+  CACHE_VERSION_TTL: 21600, // 6 小時，CacheService 的上限
+  CACHE_MAX_BYTES: 90000,   // CacheService 單項上限 100KB，留點餘裕
 };
 
 /** Records 工作表的欄位，程式依「表頭名稱」對應，順序可以自己調。 */
