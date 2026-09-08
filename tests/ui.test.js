@@ -427,6 +427,46 @@ const server = http.createServer((req, res) => {
   await page.waitForSelector('.record-list .row');
   const afterDelete = await page.textContent('#record-list');
 
+  // 8.5) 外觀切換：自動 / 淺色 / 深色
+  await page.click('.tab[data-tab="settings"]');
+  await page.waitForSelector('#theme-switch');
+  const themeAuto = await page.evaluate(() => ({
+    attr: document.documentElement.dataset.theme || null,
+    bg: getComputedStyle(document.body).backgroundColor,
+  }));
+
+  await page.click('[data-theme-choice="light"]');
+  await page.waitForTimeout(120);
+  const themeLight = await page.evaluate(() => ({
+    attr: document.documentElement.dataset.theme,
+    bg: getComputedStyle(document.body).backgroundColor,
+    meta: document.getElementById('theme-color').getAttribute('content'),
+    stored: localStorage.getItem('pennycount.theme'),
+  }));
+  await shot('9-theme-light-on-dark-device');
+
+  await page.click('[data-theme-choice="dark"]');
+  await page.waitForTimeout(120);
+  const themeDark = await page.evaluate(() => ({
+    attr: document.documentElement.dataset.theme,
+    bg: getComputedStyle(document.body).backgroundColor,
+    meta: document.getElementById('theme-color').getAttribute('content'),
+  }));
+
+  // 重新載入之後選擇要留著，而且不能先閃一下淺色（inline script 在首次繪製前就套用）
+  await page.reload();
+  await page.waitForSelector('#app:not([hidden])');
+  const themeAfterReload = await page.evaluate(() => document.documentElement.dataset.theme);
+
+  await page.click('.tab[data-tab="settings"]');
+  await page.click('[data-theme-choice="auto"]');
+  await page.waitForTimeout(120);
+  const themeBackToAuto = await page.evaluate(() => ({
+    attr: document.documentElement.dataset.theme || null,
+    stored: localStorage.getItem('pennycount.theme'),
+    bg: getComputedStyle(document.body).backgroundColor,
+  }));
+
   // 9) 淺色模式的統計頁
   const light = await context.newPage();
   await light.emulateMedia({ colorScheme: 'light' });
@@ -469,6 +509,14 @@ const server = http.createServer((req, res) => {
     '＋新增開啟編輯器': /新增/.test(opensNew),
     '收入分類是另一組': incomeRows.some((n) => n.includes('薪水')) && !incomeRows.some((n) => n.includes('餐飲')),
     '刪除分類後紀錄改成其他': !/娛樂/.test(afterDelete) && /其他/.test(afterDelete),
+    '外觀：自動時不寫 data-theme': themeAuto.attr === null,
+    '外觀：選淺色會蓋掉系統深色': themeLight.attr === 'light' && themeLight.bg === 'rgb(248, 242, 251)',
+    '外觀：淺色會存起來': themeLight.stored === 'light',
+    '外觀：狀態列顏色跟著換': themeLight.meta === '#F8F2FB' && themeDark.meta === '#17131D',
+    '外觀：選深色會套深底': themeDark.attr === 'dark' && themeDark.bg === 'rgb(23, 19, 29)',
+    '外觀：重新載入後保留選擇': themeAfterReload === 'dark',
+    '外觀：切回自動會清掉設定': themeBackToAuto.attr === null && themeBackToAuto.stored === null,
+    '外觀：自動時跟著系統（此裝置為深色）': themeBackToAuto.bg === 'rgb(23, 19, 29)',
     '沒有 JS 錯誤': errors.length === 0,
   };
 

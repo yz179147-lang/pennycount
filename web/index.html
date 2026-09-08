@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
 <title>PennyCount 記帳</title>
 <meta name="description" content="用 Google Sheet 當資料庫的輕量記帳工具">
-<meta name="theme-color" content="#17131D" media="(prefers-color-scheme: dark)">
-<meta name="theme-color" content="#F8F2FB" media="(prefers-color-scheme: light)">
+<!-- 手動切換主題時，這個標籤的 content 會由 app.js 改寫 -->
+<meta id="theme-color" name="theme-color" content="#F8F2FB">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -14,6 +14,15 @@
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="icon" href="icons/icon-192.png">
 <link rel="stylesheet" href="styles.css">
+<script>
+  // 在第一次繪製前套用使用者選過的主題，否則選深色的人每次開啟都會先閃一下白畫面
+  try {
+    var savedTheme = localStorage.getItem('pennycount.theme');
+    if (savedTheme === 'dark' || savedTheme === 'light') {
+      document.documentElement.dataset.theme = savedTheme;
+    }
+  } catch (err) { /* 私密模式讀不到 localStorage，維持跟隨系統 */ }
+</script>
 </head>
 <body>
 
@@ -109,6 +118,17 @@
     <!-- 設定 -->
     <section class="view" data-view="settings" hidden>
       <div class="settings">
+        <div class="field">
+          <span>外觀</span>
+          <div id="theme-switch" class="seg" role="radiogroup" aria-label="外觀模式">
+            <span class="seg__thumb" aria-hidden="true"></span>
+            <button class="seg__btn" data-theme-choice="auto" role="radio" aria-checked="true">自動</button>
+            <button class="seg__btn" data-theme-choice="light" role="radio" aria-checked="false">淺色</button>
+            <button class="seg__btn" data-theme-choice="dark" role="radio" aria-checked="false">深色</button>
+          </div>
+          <small class="field__hint">「自動」會跟著手機的深色模式設定切換。</small>
+        </div>
+        <hr>
         <button id="open-categories" class="settings__link">
           <span>🏷️ 管理分類</span><span class="settings__link-hint">新增、改名、換圖示、設預算 ›</span>
         </button>

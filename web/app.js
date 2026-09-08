@@ -71,9 +71,82 @@ window.App = (function () {
     return (match && match.icon) || (type === 'income' ? '💰' : '📦');
   }
 
+  // ---------- 外觀主題 ----------
+
+  /**
+   * 三種狀態：auto（跟隨系統）／light／dark。
+   * 選擇存在 localStorage，實際套用是在 <html> 加 data-theme，
+   * CSS 那邊已經處理好三種情況的優先順序。
+   */
+  const Theme = (function () {
+    const KEY = 'pennycount.theme';
+    const media = window.matchMedia('(prefers-color-scheme: dark)');
+
+    function choice() {
+      try {
+        const saved = localStorage.getItem(KEY);
+        return (saved === 'light' || saved === 'dark') ? saved : 'auto';
+      } catch (err) {
+        return 'auto';
+      }
+    }
+
+    /** 實際會呈現的顏色（把 auto 換算成 light / dark）。 */
+    function resolved() {
+      const current = choice();
+      return current === 'auto' ? (media.matches ? 'dark' : 'light') : current;
+    }
+
+    function apply() {
+      const current = choice();
+      const root = document.documentElement;
+      if (current === 'auto') delete root.dataset.theme;
+      else root.dataset.theme = current;
+
+      // 手機的狀態列顏色要跟著換，不然深色介面配白色狀態列很突兀
+      const meta = document.getElementById('theme-color');
+      if (meta) {
+        const styles = getComputedStyle(root);
+        const bg = styles.getPropertyValue(resolved() === 'dark' ? '--d-bg' : '--bg').trim();
+        if (bg) meta.setAttribute('content', bg);
+      }
+
+      $$('#theme-switch .seg__btn').forEach(function (button) {
+        const active = button.dataset.themeChoice === current;
+        button.classList.toggle('is-active', active);
+        button.setAttribute('aria-checked', active ? 'true' : 'false');
+      });
+      const thumb = $('#theme-switch .seg__thumb');
+      if (thumb) thumb.style.transform =
+        'translateX(' + (['auto', 'light', 'dark'].indexOf(current) * 100) + '%)';
+    }
+
+    function set(next) {
+      try {
+        if (next === 'auto') localStorage.removeItem(KEY);
+        else localStorage.setItem(KEY, next);
+      } catch (err) { /* 存不進去就只套用這一次 */ }
+      apply();
+      // 圖表是用 CSS 變數畫的，換主題不用重畫；但提示泡泡要收起來避免殘影
+      const tip = document.querySelector('.chart-tip:not([hidden])');
+      if (tip) tip.hidden = true;
+    }
+
+    function init() {
+      apply();
+      // 系統在「自動」模式下切換深淺色時，狀態列顏色也要跟著更新
+      const onSystemChange = function () { if (choice() === 'auto') apply(); };
+      if (media.addEventListener) media.addEventListener('change', onSystemChange);
+      else if (media.addListener) media.addListener(onSystemChange);
+    }
+
+    return { init: init, set: set, choice: choice, resolved: resolved };
+  })();
+
   // ---------- 啟動 ----------
 
   function boot() {
+    Theme.init();
     bindEvents();
     document.body.dataset.type = state.type;
 
@@ -466,6 +539,11 @@ window.App = (function () {
       tab.addEventListener('click', function () { switchView(tab.dataset.tab); });
     });
 
+    $('#theme-switch').addEventListener('click', function (event) {
+      const button = event.target.closest('[data-theme-choice]');
+      if (button) Theme.set(button.dataset.themeChoice);
+    });
+
     $('#open-categories').addEventListener('click', function () { switchView('categories'); });
     $('#categories-back').addEventListener('click', function () { switchView('settings'); });
 
@@ -531,6 +609,7 @@ window.App = (function () {
 
   return {
     boot: boot,
+    theme: Theme,
     state: state,
     views: views,
     $: $,
