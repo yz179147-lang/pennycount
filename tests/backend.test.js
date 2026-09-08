@@ -38,11 +38,12 @@ class FakeRange {
 }
 
 class FakeSheet {
-  constructor(name) { this.name = name; this.rows = []; }
+  constructor(name) { this.name = name; this.rows = []; this.reads = 0; }
   getLastRow() { return this.rows.length; }
   getLastColumn() { return this.rows.reduce((max, row) => Math.max(max, row.length), 0); }
   getMaxRows() { return Math.max(this.rows.length, 1000); }
   getRange(a, b, c, d) {
+    this.reads += 1;   // 用來驗證快取真的有擋下重複的讀取
     if (typeof a === 'string') return new FakeRange(this, 1, 1, Math.max(this.rows.length, 1), 26);
     return new FakeRange(this, a, b, c, d);
   }
@@ -59,6 +60,7 @@ class FakeSpreadsheet {
 }
 
 const book = new FakeSpreadsheet();
+const cacheStore = new Map();
 const props = {};
 let uuidSeed = 0;
 
@@ -81,6 +83,21 @@ const sandbox = {
   },
   LockService: {
     getScriptLock: () => ({ tryLock: () => true, releaseLock: () => {} }),
+  },
+  // 有 TTL 行為的假快取，才能真的驗證「寫入後會失效」
+  CacheService: {
+    getScriptCache: () => ({
+      get(key) {
+        const hit = cacheStore.get(key);
+        if (!hit) return null;
+        if (hit.expires <= Date.now()) { cacheStore.delete(key); return null; }
+        return hit.value;
+      },
+      put(key, value, seconds) {
+        cacheStore.set(key, { value, expires: Date.now() + (seconds || 600) * 1000 });
+      },
+      remove(key) { cacheStore.delete(key); },
+    }),
   },
   ContentService: {
     MimeType: { JSON: 'application/json' },
@@ -339,6 +356,44 @@ check('記帳回覆帶預算進度', /早午餐/.test(lineSay('早午餐 100')),
 check('刪除分類', /已刪除分類/.test(lineSay('刪除分類 早午餐')), true);
 check('刪除分類後紀錄搬家', run("queryRecords({category:'早午餐'}).total"), 0);
 check('刪除不存在的分類會提示', /找不到分類/.test(lineSay('刪除分類 不存在的類')), true);
+
+console.log('\n[讀取快取]');
+const recordsSheet = () => book.sheets['Records'];
+
+// 同樣的查詢第二次不該再去讀試算表
+run("queryRecords({month:'" + thisMonth + "'})");
+const readsBefore = recordsSheet().reads;
+run("queryRecords({month:'" + thisMonth + "'})");
+check('相同查詢會命中快取', recordsSheet().reads === readsBefore, true);
+
+// month 與等價的 from/to 應該是同一份快取
+run("queryRecords({from:'" + thisMonth + "-01',to:'" + thisMonth + "-31'})");
+check('month 與 from/to 命中同一份', recordsSheet().reads === readsBefore, true);
+
+// 寫入之後一定要看到新資料（版本號換掉 = 全部失效）
+const cacheProbe = run("createRecord({date:'" + thisMonth + "-04',type:'expense',category:'餐飲',amount:77,note:'快取測試'},{source:'web'})");
+check('寫入後讀得到新資料', run("queryRecords({month:'" + thisMonth + "',keyword:'快取測試'}).total"), 1);
+check('寫入後統計跟著更新', run("analytics({month:'" + thisMonth + "'}).totals.expense"), 437);
+
+// 從 LINE 寫入也要讓網頁端的快取失效
+lineSay('2099/03/04 快取同步測試 23');
+check('LINE 寫入後網頁讀得到', run("queryRecords({month:'" + thisMonth + "',keyword:'快取同步測試'}).total > 0"), true);
+
+run("deleteRecord('" + cacheProbe.id + "')");
+check('刪除後統計也跟著回去', run("analytics({month:'" + thisMonth + "'}).totals.expense"), 383);
+
+// 分類異動同樣要失效
+const cacheCat = run("createCategory({type:'expense',name:'快取分類'})");
+check('新增分類後清單立刻有', run("listCategories().filter(function(c){return c.name==='快取分類';}).length"), 1);
+run("updateCategory('" + cacheCat.id + "',{icon:'🧪'})");
+check('改圖示後清單立刻更新', run("findCategoryByName('快取分類','expense').icon"), '🧪');
+run("deleteCategory('" + cacheCat.id + "')");
+check('刪除後清單立刻沒有', run("listCategories().filter(function(c){return c.name==='快取分類';}).length"), 0);
+
+check('太大的結果不進快取也不會壞', run(`(function(){
+  var big = queryRecords({ limit: 500 });
+  return big.items.length >= 0;
+})()`), true);
 
 console.log('\n[POST JSON API]');
 check('text/plain body', run("(function(){var r=doPost({parameter:{},postData:{contents:JSON.stringify({action:'ping',token:'secret'})}});return JSON.parse(r.text).ok;})()"), true);

@@ -2,16 +2,18 @@
  * 只快取「殼」（HTML/CSS/JS/圖示），資料一律走網路。
  * 這樣離線時 App 仍打得開，記帳會先進 outbox，連線後由 app.js 補送。
  */
-const CACHE = 'pennycount-v2';
+const CACHE = 'pennycount-v3';
 const SHELL = [
   './',
   './index.html',
   './styles.css',
+  './theme-boot.js',
   './api.js',
   './charts.js',
   './app.js',
   './categories.js',
   './stats.js',
+  './boot.js',
   './manifest.webmanifest',
   './icons/icon-192.png',
   './icons/icon-512.png',

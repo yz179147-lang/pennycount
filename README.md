@@ -73,12 +73,14 @@ apps-script/        後端（貼進 Apps Script 編輯器，或用 clasp 推上�
   Setup.gs          setup()／示範資料／自我測試
   Util.gs           日期、金額、回應格式
 web/                前端 PWA（純靜態，可放 GitHub Pages 或任何空間）
-  index.html        版面
-  api.js            打後端的薄薄一層（含離線 outbox）
+  index.html        版面與內容安全政策
+  theme-boot.js     首次繪製前套用主題（避免閃白）
+  api.js            打後端的薄薄一層（一律 POST，含離線 outbox）
   app.js            外殼、記帳頁、紀錄頁、設定頁
   categories.js     分類管理與 emoji 選擇器
   stats.js          統計頁
   charts.js         SVG 圖表（長條／折線，無第三方套件）
+  boot.js           啟動點
   styles.css sw.js manifest.webmanifest icons/
 docs/               安裝與使用文件
 ```
@@ -149,7 +151,9 @@ npm run test:ui # 前端：假後端 + Chromium 走完記帳→紀錄→編輯�
 - **日期以文字 `yyyy-MM-dd` 儲存**，避免試算表在不同時區被開啟時整批位移一天。
 - **欄位靠表頭名稱對應，不靠位置**。你可以在試算表裡調換欄位、加自己的欄位，
   程式照樣讀得懂；日後加新欄位也會自動補上，不用手動改表。
-- **統計一次算完**。整個統計頁只打一次 `analytics`，不是前端撈全部紀錄自己算。
+- **統計一次算完**。整個統計頁只打一次 `analytics`，不是前端撈全部紀錄自己算，
+  而且讀取結果會快取 45 秒；任何寫入都會立刻讓快取失效，所以不會讀到過期的數字。
+- **切回前景就重新整理**。在 LINE 記完帳切回 App，畫面會自己更新，不用手動重整。
 - **配色是驗證過才用的**。品牌紫粉色票排進角色表之後，每個角色都跑過 WCAG 對比度；
   不夠的（小字用的收支色、按鈕漸層、次要文字）都調深到達標，深色模式是另外挑的階。
 - **統計頁沒有圓餅圖**。紫粉是同一個色系，切成 6 段之後相鄰兩段的色差遠低於可辨識門檻
@@ -161,11 +165,29 @@ npm run test:ui # 前端：假後端 + Chromium 走完記帳→紀錄→編輯�
 ## 安全性須知
 
 Web App 必須部署成「任何人」才能讓 LINE 和瀏覽器呼叫，等於這個網址是公開的。
-保護方式：
+目前的防線：
 
-- `setup()` 會自動產生 `API_TOKEN`，前端每次請求都要帶，沒帶就被拒絕。
+- `setup()` 會自動產生 `API_TOKEN`（96 bits），前端每次請求都要帶，沒帶就被拒絕。
+- **存取碼只放在 request body，不進網址**——前端所有請求都走 POST，
+  密鑰因此不會留在瀏覽器歷史、執行紀錄或你的截圖裡。
+- **內容安全政策（CSP）**：頁面宣告 `script-src 'self'`、
+  `connect-src` 只允許 Apps Script 的兩個網域。萬一哪天有 XSS，
+  攻擊者既不能執行注入的腳本，也不能把存取碼送去別的地方。
 - LINE webhook 網址帶 `key=<LINE_HOOK_KEY>`，並用 `LINE_ALLOWED_USER_IDS` 限制誰能記帳。
 - 這些機密只存在「指令碼屬性」與你自己的裝置，**不要**寫進程式碼或 commit 進 repo。
+
+還沒做、但你應該知道的：
+
+| 項目 | 說明 |
+| --- | --- |
+| **Google 帳號兩步驟驗證** | 所有資料都在你的 Drive 裡，這是投報率最高的一件事，而且免費 |
+| `<帳號>.github.io` 是共用 origin | 同一個 GitHub 帳號的其他 Pages 專案讀得到這個 App 的 localStorage（含存取碼）。要隔離就綁自訂網域 |
+| LINE 簽章無法驗證 | Apps Script 的 `doPost` 讀不到 HTTP header。要做到得在前面架 Cloudflare Worker 之類的中繼層 |
+| 沒有速率限制 | 有人狂打 `/exec`，即使全被擋下也會消耗每日配額 |
+| OAuth 範圍偏寬 | 目前是 `spreadsheets`；指令碼綁定在帳本上時可考慮改成 `spreadsheets.currentonly` 縮小波及範圍 |
+
+**存取碼外洩了怎麼辦**：到指令碼屬性把 `API_TOKEN` 換成新值即可，
+不需要重新部署（屬性是執行時才讀的），再到前端「設定」重新填一次。
 
 ## 後續路線圖
 

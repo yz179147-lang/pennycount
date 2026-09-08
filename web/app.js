@@ -594,6 +594,21 @@ window.App = (function () {
 
     window.addEventListener('online', function () { flushOutbox(true); });
 
+    /**
+     * 從背景切回前景時重新抓資料。
+     *
+     * 沒有這段的話，你在 LINE 上記完帳、切回 App，看到的還是舊畫面，
+     * 要換個月份或重新整理才會更新——這是實際用起來最常遇到的困惑。
+     * 後端對讀取有快取，所以這裡不做時間節流也不會浪費配額。
+     */
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState !== 'visible') return;
+      if (!Api.config.isReady || state.loading) return;
+      if (views.stats) views.stats.invalidate();
+      loadCategories().then(loadMonth);
+      flushOutbox(true);
+    });
+
     document.addEventListener('keydown', function (event) {
       if (event.key !== 'Escape') return;
       if (!$('#category-sheet').hidden && views.categories) views.categories.close();

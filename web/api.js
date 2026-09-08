@@ -2,8 +2,9 @@
  * 與 Apps Script 後端溝通的薄薄一層。
  *
  * 兩個重點：
- * 1. 寫入用 POST + Content-Type: text/plain。Apps Script 不會回應 CORS preflight，
- *    text/plain 屬於「簡單請求」不會觸發 preflight，這是唯一能從瀏覽器直接打的方式。
+ * 1. 一律用 POST + Content-Type: text/plain。Apps Script 不會回應 CORS preflight，
+ *    text/plain 屬於「簡單請求」不會觸發 preflight，這是唯一能從瀏覽器直接打的方式；
+ *    而且把存取碼放在 body 而不是網址，密鑰才不會留在瀏覽器歷史與各種紀錄裡。
  * 2. 離線或送出失敗時，寫入請求會進 outbox（localStorage），連線恢復後自動補送。
  */
 const Api = (function () {
@@ -41,23 +42,16 @@ const Api = (function () {
     writeOutbox(items);
   }
 
-  /** 唯讀查詢：GET + query string。 */
-  async function get(action, params) {
-    const url = new URL(config.url);
-    url.searchParams.set('action', action);
-    if (config.token) url.searchParams.set('token', config.token);
-    Object.keys(params || {}).forEach(function (key) {
-      const value = params[key];
-      if (value !== undefined && value !== null && value !== '') {
-        url.searchParams.set(key, value);
-      }
-    });
-
-    const response = await fetch(url.toString(), { method: 'GET', redirect: 'follow' });
-    return unwrap(await response.text());
-  }
-
-  /** 寫入：POST + text/plain（避免 CORS preflight）。 */
+  /**
+   * 所有請求都走 POST + text/plain。
+   *
+   * 讀取原本是 GET，但那會把存取碼帶進網址，於是它會留在瀏覽器歷史紀錄、
+   * Apps Script 的執行紀錄，以及你截圖或分享畫面的時候。改成放進 request body
+   * 之後，網址就再也不會出現密鑰。
+   *
+   * 用 text/plain 而不是 application/json 是因為 Apps Script 不回應 CORS
+   * preflight，只有「簡單請求」打得進去。
+   */
   async function post(action, params) {
     const body = Object.assign({ action: action, token: config.token }, params || {});
     const response = await fetch(config.url, {
@@ -104,17 +98,17 @@ const Api = (function () {
   return {
     config: config,
 
-    ping: function () { return get('ping'); },
-    listRecords: function (filter) { return get('listRecords', filter); },
-    summary: function (filter) { return get('summary', filter); },
-    analytics: function (filter) { return get('analytics', filter); },
+    ping: function () { return post('ping'); },
+    listRecords: function (filter) { return post('listRecords', filter); },
+    summary: function (filter) { return post('summary', filter); },
+    analytics: function (filter) { return post('analytics', filter); },
 
     addRecord: function (record) { return write('addRecord', record, { queueable: true }); },
     updateRecord: function (id, patch) { return write('updateRecord', Object.assign({ id: id }, patch)); },
     deleteRecord: function (id) { return write('deleteRecord', { id: id }); },
 
-    listCategories: function () { return get('listCategories'); },
-    categoryUsage: function () { return get('categoryUsage'); },
+    listCategories: function () { return post('listCategories'); },
+    categoryUsage: function () { return post('categoryUsage'); },
     addCategory: function (category) { return write('addCategory', category); },
     updateCategory: function (id, patch) { return write('updateCategory', Object.assign({ id: id }, patch)); },
     deleteCategory: function (id, reassignTo) { return write('deleteCategory', { id: id, reassignTo: reassignTo }); },

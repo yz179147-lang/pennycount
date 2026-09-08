@@ -2,6 +2,25 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="utf-8">
+<!--
+  內容安全政策：GitHub Pages 沒辦法自訂 HTTP header，改用 meta 宣告。
+  預設全部禁止，只開這個 App 真的會用到的來源；connect-src 限定
+  Apps Script 的兩個網域（/exec 會 302 轉到 googleusercontent.com）。
+  萬一哪天有 XSS，攻擊者也無法把存取碼送去別的地方。
+  style-src 留 'unsafe-inline' 是因為長條圖的寬度是行內樣式算出來的；
+  行內樣式的風險遠低於行內腳本，腳本維持 'self'。
+-->
+<meta http-equiv="Content-Security-Policy" content="
+  default-src 'none';
+  script-src 'self';
+  style-src 'self' 'unsafe-inline';
+  img-src 'self';
+  font-src 'self';
+  connect-src 'self' https://script.google.com https://script.googleusercontent.com;
+  manifest-src 'self';
+  worker-src 'self';
+  base-uri 'none';
+  form-action 'none'">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
 <title>PennyCount 記帳</title>
 <meta name="description" content="用 Google Sheet 當資料庫的輕量記帳工具">
@@ -14,15 +33,7 @@
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="icon" href="icons/icon-192.png">
 <link rel="stylesheet" href="styles.css">
-<script>
-  // 在第一次繪製前套用使用者選過的主題，否則選深色的人每次開啟都會先閃一下白畫面
-  try {
-    var savedTheme = localStorage.getItem('pennycount.theme');
-    if (savedTheme === 'dark' || savedTheme === 'light') {
-      document.documentElement.dataset.theme = savedTheme;
-    }
-  } catch (err) { /* 私密模式讀不到 localStorage，維持跟隨系統 */ }
-</script>
+<script src="theme-boot.js"></script>
 </head>
 <body>
 
@@ -246,6 +257,6 @@
 <script src="app.js"></script>
 <script src="categories.js"></script>
 <script src="stats.js"></script>
-<script>App.boot();</script>
+<script src="boot.js"></script>
 </body>
 </html>
