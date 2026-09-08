@@ -1,70 +1,98 @@
 /* PennyCount — 手機優先，深色／淺色自動切換 */
 
+/*
+ * 配色：紫粉品牌色系。
+ *
+ * 品牌色票直接對應到下面的角色；有幾個角色是從色票推導出來的，理由都寫在旁邊：
+ * - 小字用的支出／收入色調深過，因為原色在淺底上只有 3.2:1，讀 12-14px 數字不夠。
+ * - 按鈕用的漸層比裝飾用的深一階，白字才有 4.5:1。
+ * - 深色模式整組是重新挑的階（同色相、換亮度），不是把淺色反轉。
+ */
 :root {
   color-scheme: light dark;
-  --bg: #f4f4f7;
-  --surface: #ffffff;
-  --surface-2: #ecedf1;
-  --text: #16181d;
-  --muted: #71757f;
-  --line: #e2e3e9;
-  --accent: #2f6df6;
-  --expense: #e2504a;
-  --income: #1f9d63;
+
+  /* 底層 */
+  --bg: #F8F2FB;             /* 頁面淺紫背景 */
+  --surface: #FBF8FF;        /* 淡紫白：卡片 */
+  --surface-soft: #FFF8FB;   /* 淡粉白：彈出面板 */
+  --surface-2: #F1E6FF;      /* 淺紫底色：輸入框、進度條軌道 */
+  --icon-bg: #E2CEF8;        /* 紫色圖示底：選中的分類、圖示底 */
+  --pink-soft: #FFDCE9;      /* 主粉色：收入相關的柔和底 */
+  --line: #EADCF6;
+
+  /* 文字 */
+  --text: #322A3D;
+  --muted: #796E84;          /* 次要文字 #81758C 調深，12px 也有 4.5:1 */
+  --muted-soft: #81758C;     /* 原色，只用在大字與裝飾 */
+
+  /* 品牌主色 */
+  --accent: #7448A5;         /* 深紫：連結、選中、實心按鈕 */
+  --accent-soft: #A77BD7;    /* 主紫：次要強調、圖表主色 */
+  --grad-a: #9A6DCC;         /* 紫粉漸層（裝飾用，不放文字） */
+  --grad-b: #D78EAF;
+  --grad-ink-a: #905EC7;     /* 同一條漸層深一階，白字才夠對比 */
+  --grad-ink-b: #C04E82;
+
+  /* 收支 */
+  --expense: #D86491;        /* 深粉：大字與圖形 */
+  --expense-ink: #CD3973;    /* 小字用 */
+  --income: #3E9E86;         /* 補的藍綠，和紫粉不衝突又保留正負直覺 */
+  --income-ink: #327F6C;
+
   --radius: 14px;
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-top: env(safe-area-inset-top, 0px);
 
-  /* 圖表用色：固定順序指派，不循環使用。
-     這組值經過色盲（protan/deuteran）與對比度驗證，
-     淺色模式下 3 個色階低於 3:1，所以每張圖都一定附上文字標籤或排行清單。 */
-  --series-1: #2a78d6;
-  --series-2: #eb6834;
-  --series-3: #1baf7a;
-  --series-4: #eda100;
-  --series-5: #e87ba4;
-  --series-6: #008300;
-  --series-7: #4a3aa7;
-  --series-8: #e34948;
+  /* 預算狀態：一律搭配 ✅⚠️⛔ 圖示，不只靠顏色 */
+  --status-good: #3E9E86;
+  --status-warning: #C08404;
+  --status-critical: #D03B3B;
 
-  --status-good: #0ca30c;
-  --status-warning: #fab219;
-  --status-critical: #d03b3b;
-
-  --chart-bar: #c9ccd4;          /* 非強調的長條／參考線 */
-  --chart-grid: #ececf1;
-  --chart-axis: #d8d9e0;
-  --chart-label: #71757f;
-  --chart-label-strong: #16181d;
+  /* 圖表 */
+  --chart-fill: #A77BD7;         /* 主要資料色 */
+  --chart-bar: #94829F;          /* 非強調長條／上月參考線 */
+  --chart-grid: #EFE6F8;
+  --chart-axis: #E2D5F0;
+  --chart-label: #796E84;
+  --chart-label-strong: #322A3D;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #111318;
-    --surface: #1a1d24;
-    --surface-2: #23262f;
-    --text: #eef0f4;
-    --muted: #969ba7;
-    --line: #2c2f38;
-    --accent: #5b8dff;
-    --expense: #ff6b62;
-    --income: #45c98a;
+    --bg: #17131D;
+    --surface: #221B2B;
+    --surface-soft: #261D2F;
+    --surface-2: #2E2439;
+    --icon-bg: #3A2C4A;
+    --pink-soft: #4A2B3C;
+    --line: #352A42;
 
-    /* 深色模式是另外挑過的階，不是把淺色反轉 */
-    --series-1: #3987e5;
-    --series-2: #d95926;
-    --series-3: #199e70;
-    --series-4: #c98500;
-    --series-5: #d55181;
-    --series-6: #008300;
-    --series-7: #9085e9;
-    --series-8: #e66767;
+    --text: #F2ECF7;
+    --muted: #AA9EB6;
+    --muted-soft: #AA9EB6;
 
-    --chart-bar: #454a58;
-    --chart-grid: #262932;
-    --chart-axis: #363a45;
-    --chart-label: #969ba7;
-    --chart-label-strong: #eef0f4;
+    --accent: #C9A5EA;
+    --accent-soft: #A77BD7;
+    --grad-a: #8A5FC0;
+    --grad-b: #D78EAF;
+    --grad-ink-a: #7E52B4;
+    --grad-ink-b: #B25585;
+
+    --expense: #F08BB0;
+    --expense-ink: #F08BB0;
+    --income: #4FC0A2;
+    --income-ink: #4FC0A2;
+
+    --status-good: #4FC0A2;
+    --status-warning: #E8A93B;
+    --status-critical: #E86A6A;
+
+    --chart-fill: #C9A5EA;
+    --chart-bar: #7A6A8C;
+    --chart-grid: #2B2235;
+    --chart-axis: #3C3049;
+    --chart-label: #AA9EB6;
+    --chart-label-strong: #F2ECF7;
   }
 }
 
@@ -88,7 +116,7 @@ button { cursor: pointer; }
 h1, h2 { margin: 0; }
 hr { border: 0; border-top: 1px solid var(--line); margin: 1.25rem 0; }
 .muted { color: var(--muted); font-size: .875rem; }
-.error { color: var(--expense); font-size: .875rem; }
+.error { color: var(--expense-ink); font-size: .875rem; }
 .empty { color: var(--muted); text-align: center; padding: 2.5rem 1rem; }
 
 /* ---------- 首次設定 ---------- */
@@ -102,7 +130,7 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 1.25rem 0; }
 
 .onboarding__card {
   width: min(26rem, 100%);
-  background: var(--surface);
+  background: var(--surface-soft);
   border-radius: var(--radius);
   padding: 1.75rem 1.5rem;
   box-shadow: 0 12px 40px rgb(0 0 0 / .12);
@@ -130,8 +158,12 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 1.25rem 0; }
   background: var(--surface-2);
   font-weight: 600;
 }
-.btn--primary { background: var(--accent); border-color: transparent; color: #fff; }
-.btn--danger { background: transparent; border-color: var(--expense); color: var(--expense); }
+.btn--primary {
+  background: linear-gradient(135deg, var(--grad-ink-a), var(--grad-ink-b));
+  border-color: transparent;
+  color: #fff;
+}
+.btn--danger { background: transparent; border-color: var(--expense-ink); color: var(--expense-ink); }
 .btn:disabled { opacity: .55; }
 .btn--save { width: 100%; padding: .95rem; font-size: 1.0625rem; margin-top: .875rem; }
 
@@ -176,8 +208,8 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 1.25rem 0; }
 }
 .topbar__stats { display: flex; justify-content: center; gap: .75rem; font-size: .75rem; color: var(--muted); }
 .stat b { font-weight: 700; color: var(--text); }
-.stat--expense b { color: var(--expense); }
-.stat--income b { color: var(--income); }
+.stat--expense b { color: var(--expense-ink); }
+.stat--income b { color: var(--income-ink); }
 
 .views { flex: 1; padding: 1rem .75rem calc(5.5rem + var(--safe-bottom)); }
 
@@ -199,7 +231,11 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 1.25rem 0; }
   font-weight: 600;
   color: var(--muted);
 }
-.type-switch__btn.is-active { background: var(--surface); color: var(--text); box-shadow: 0 1px 4px rgb(0 0 0 / .12); }
+.type-switch__btn.is-active {
+  background: var(--surface);
+  color: var(--accent);
+  box-shadow: 0 1px 4px rgb(50 42 61 / .12);
+}
 
 .amount {
   display: flex;
@@ -231,7 +267,7 @@ body[data-type="income"] .amount__value { color: var(--income); }
   border-radius: 12px;
   font-size: .75rem;
 }
-.chip.is-active { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--surface)); }
+.chip.is-active { border-color: var(--accent-soft); background: var(--icon-bg); }
 .chip__icon { font-size: 1.25rem; }
 .chip__name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 
@@ -292,15 +328,20 @@ body[data-type="income"] .amount__value { color: var(--income); }
 .row__main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
 .row__main small { color: var(--muted); font-size: .75rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .row__amount { font-variant-numeric: tabular-nums; font-weight: 600; }
-.row__amount.is-expense { color: var(--expense); }
-.row__amount.is-income { color: var(--income); }
+.row__amount.is-expense { color: var(--expense-ink); }
+.row__amount.is-income { color: var(--income-ink); }
 
 /* ---------- 統計 ---------- */
 
 .stats { display: flex; flex-direction: column; gap: .75rem; }
 .stats.is-loading { opacity: .45; transition: opacity .15s; }
 
-.card { background: var(--surface); border-radius: var(--radius); padding: .9rem 1rem 1rem; }
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: .9rem 1rem 1rem;
+}
 .card__title { font-size: .8125rem; color: var(--muted); font-weight: 600; margin-bottom: .6rem; }
 .card__label { display: block; font-size: .75rem; color: var(--muted); }
 .card__caption { font-size: .75rem; color: var(--muted); margin: .6rem 0 0; }
@@ -326,22 +367,25 @@ body[data-type="income"] .amount__value { color: var(--income); }
   color: var(--muted);
 }
 .hero__split b { color: var(--text); font-variant-numeric: tabular-nums; }
-.hero__split .is-income { color: var(--income); }
+.hero__split .is-income { color: var(--income-ink); }
 
 .delta { font-size: .75rem; font-weight: 600; }
-.delta.is-up { color: var(--expense); }
-.delta.is-down { color: var(--income); }
+.delta.is-up { color: var(--expense-ink); }
+.delta.is-down { color: var(--income-ink); }
 .delta.is-new { color: var(--muted); font-weight: 400; }
 
 .tiles { display: grid; grid-template-columns: repeat(2, 1fr); gap: .5rem; }
-.tile { background: var(--surface); border-radius: var(--radius); padding: .75rem .85rem; }
+.tile {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: .75rem .85rem;
+}
 .tile__label { display: block; font-size: .75rem; color: var(--muted); }
 .tile__value { display: block; font-size: 1.125rem; margin: .1rem 0; }
 .tile__caption { font-size: .6875rem; color: var(--muted); }
 
 .chart { position: relative; margin: .25rem 0 .1rem; }
-.chart--donut { display: flex; justify-content: center; }
-.donut-wrap { display: flex; justify-content: center; padding: .25rem 0 .5rem; }
 
 .chart-tip {
   position: absolute;
@@ -369,18 +413,23 @@ body[data-type="income"] .amount__value { color: var(--income); }
 .legend__item { display: inline-flex; align-items: center; gap: .3rem; }
 .legend__dot { width: .5rem; height: .5rem; border-radius: 50%; }
 
-.cat-lines { display: flex; flex-direction: column; gap: .5rem; }
-.cat-line {
+/* 分類佔比排行：長度編碼，不靠顏色區分 */
+.ranks { display: flex; flex-direction: column; gap: .8rem; }
+.rank__head {
   display: grid;
-  grid-template-columns: auto 1fr auto auto auto;
-  align-items: center;
+  grid-template-columns: 1fr auto auto;
+  align-items: baseline;
   gap: .5rem;
   font-size: .8125rem;
+  margin-bottom: .3rem;
 }
-.cat-line__dot { width: .5rem; height: .5rem; border-radius: 50%; }
-.cat-line__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cat-line__amount { font-variant-numeric: tabular-nums; font-weight: 600; }
-.cat-line__share { color: var(--muted); font-size: .75rem; min-width: 2.6rem; text-align: right; }
+.rank__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rank__value { font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
+.rank__value small { color: var(--muted); font-weight: 400; margin-left: .35rem; }
+.rank__track { height: 8px; background: var(--surface-2); border-radius: 999px; overflow: hidden; }
+.rank__fill { height: 100%; background: var(--chart-fill); border-radius: 999px; }
+/* 最大的那一筆用品牌漸層強調，其餘統一色，顏色不跟著排名跑 */
+.rank.is-top .rank__fill { background: linear-gradient(90deg, var(--grad-a), var(--grad-b)); }
 
 .budget + .budget { margin-top: .9rem; }
 .budget__head { display: flex; justify-content: space-between; font-size: .8125rem; margin-bottom: .35rem; gap: .5rem; }
@@ -397,11 +446,16 @@ body[data-type="income"] .amount__value { color: var(--income); }
 .note-row__head small { color: var(--muted); font-size: .6875rem; }
 .note-row__head b { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .note-row__track { height: 6px; background: var(--surface-2); border-radius: 999px; overflow: hidden; }
-.note-row__fill { height: 100%; background: var(--series-1); border-radius: 999px; }
+.note-row__fill { height: 100%; background: var(--chart-fill); border-radius: 999px; }
 
 /* ---------- 設定 ---------- */
 
-.settings { background: var(--surface); border-radius: var(--radius); padding: 1rem 1.1rem 1.25rem; }
+.settings {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 1rem 1.1rem 1.25rem;
+}
 .settings__row { display: flex; gap: .5rem; }
 .settings__link {
   display: flex;
@@ -504,7 +558,7 @@ body[data-type="income"] .amount__value { color: var(--income); }
   border: 1px solid transparent;
   border-radius: 8px;
 }
-.emoji.is-active { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.emoji.is-active { border-color: var(--accent); background: var(--icon-bg); }
 .emoji-input { width: 100%; margin-top: .35rem; padding: .5rem .7rem; background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; }
 
 /* ---------- 底部分頁 ---------- */
@@ -547,7 +601,7 @@ body[data-type="income"] .amount__value { color: var(--income); }
   width: 100%;
   max-width: 34rem;
   margin: 0 auto;
-  background: var(--surface);
+  background: var(--surface-soft);
   border-radius: 18px 18px 0 0;
   padding: 1.25rem 1.1rem calc(1.25rem + var(--safe-bottom));
   animation: rise .18s ease-out;
@@ -570,13 +624,13 @@ body[data-type="income"] .amount__value { color: var(--income); }
   z-index: 20;
   max-width: 88vw;
   padding: .7rem 1rem;
-  background: #23262f;
+  background: var(--text);
   color: #fff;
   border-radius: 999px;
   font-size: .875rem;
   box-shadow: 0 8px 24px rgb(0 0 0 / .25);
 }
-.toast--error { background: var(--expense); }
+.toast--error { background: var(--expense-ink); }
 
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }

@@ -3,7 +3,7 @@
  *
  * 圖表的挑選原則（參考常見記帳 App 的做法）：
  * - 只有一個數字的事情就用大數字，不要硬畫圖
- * - 想知道「花去哪」→ 分類佔比（甜甜圈 + 排行，超過 5 類併成「其他」）
+ * - 想知道「花去哪」→ 分類佔比排行（長度編碼，不用顏色區分）
  * - 想知道「有沒有比上個月兇」→ 累積支出雙線對比
  * - 想知道「長期趨勢」→ 近 6 個月長條
  * - 想知道「消費習慣」→ 星期別平均、常買項目
@@ -121,7 +121,7 @@
   function cumulativeCard(data) {
     return chartCard('累積支出　本月 vs 上月',
       '<div class="legend">' +
-        legendItem('var(--series-1)', '本月') +
+        legendItem('var(--chart-fill)', '本月') +
         legendItem('var(--chart-bar)', data.previous.month) +
       '</div>' +
       '<div class="chart" id="chart-cumulative"></div>',
@@ -133,34 +133,39 @@
       '<div class="chart" id="chart-monthly"></div>');
   }
 
+  /**
+   * 分類佔比：用長度而不是顏色來編碼。
+   *
+   * 原本是甜甜圈，但品牌色只有紫粉一個色系，要切出 6 段能分辨的顏色在物理上做不到
+   * （相鄰兩段的色差遠低於可辨識門檻，正常視力也分不出來）。
+   * 改成排行長條之後：長度本來就比弧角好比較、窄螢幕更好讀，
+   * 而且顏色不必再跟著排名跑——最大的那筆用品牌漸層強調，其餘統一用主紫。
+   */
   function categoryCard(data) {
     if (!data.categories.length) return '';
 
-    // 甜甜圈最多 5 段 + 「其他」，超過人眼就分不出來了
-    const top = data.categories.slice(0, 5);
-    const rest = data.categories.slice(5);
-    const restTotal = rest.reduce(function (sum, c) { return sum + c.amount; }, 0);
-
     const rows = data.categories.map(function (c, i) {
-      const color = i < 5 ? 'var(--series-' + (i + 1) + ')' : 'var(--chart-bar)';
       const delta = c.previous
         ? '<span class="delta ' + (c.delta > 0 ? 'is-up' : 'is-down') + '">' +
           (c.delta > 0 ? '↑' : '↓') + ' $' + money(Math.abs(c.delta)) + '</span>'
         : '<span class="delta is-new">新增</span>';
 
-      return '<div class="cat-line">' +
-        '<span class="cat-line__dot" style="background:' + color + '"></span>' +
-        '<span class="cat-line__name">' + escapeHtml(c.icon + ' ' + c.category) + '</span>' +
-        '<span class="cat-line__amount">$' + money(c.amount) + '</span>' +
-        '<span class="cat-line__share">' + c.share + '%</span>' +
-        delta +
+      return '<div class="rank' + (i === 0 ? ' is-top' : '') + '">' +
+        '<div class="rank__head">' +
+          '<span class="rank__name">' + escapeHtml(c.icon + ' ' + c.category) + '</span>' +
+          delta +
+          '<span class="rank__value">$' + money(c.amount) +
+            '<small>' + c.share + '%</small></span>' +
+        '</div>' +
+        '<div class="rank__track">' +
+          '<div class="rank__fill" style="width:' + Math.max(c.share, 1.5) + '%"></div>' +
+        '</div>' +
       '</div>';
     }).join('');
 
     return chartCard('分類佔比',
-      '<div class="donut-wrap"><div class="chart chart--donut" id="chart-donut"></div></div>' +
-      '<div class="cat-lines">' + rows + '</div>',
-      restTotal ? '「其他」是排名 6 之後的 ' + rest.length + ' 個分類合計。' : '');
+      '<div class="ranks">' + rows + '</div>',
+      '長條長度是佔本月支出的比例。');
   }
 
   function budgetCard(data) {
@@ -245,7 +250,7 @@
       label: '本月與上月的累積支出對比',
       series: [
         { name: data.previous.month, values: data.cumulative.previous.slice(0, days), color: 'var(--chart-bar)', dim: true },
-        { name: '本月', values: data.cumulative.current.slice(0, todayIndex(data, days)), color: 'var(--series-1)' },
+        { name: '本月', values: data.cumulative.current.slice(0, todayIndex(data, days)), color: 'var(--chart-fill)' },
       ],
     });
 
@@ -260,23 +265,6 @@
         };
       }),
     });
-
-    const donutHost = $('#chart-donut');
-    if (donutHost) {
-      const top = data.categories.slice(0, 5).map(function (c, i) {
-        return { label: c.category, value: c.amount, color: 'var(--series-' + (i + 1) + ')' };
-      });
-      const restTotal = data.categories.slice(5)
-        .reduce(function (sum, c) { return sum + c.amount; }, 0);
-      if (restTotal > 0) top.push({ label: '其他', value: restTotal, color: 'var(--chart-bar)' });
-
-      Charts.donut(donutHost, {
-        segments: top,
-        format: fmt,
-        label: '各分類支出佔比',
-        center: { value: '$' + money(data.totals.expense), caption: '本月支出' },
-      });
-    }
 
     // 強調花最多的那一天，跟下面那句說明對得起來
     const busiest = data.weekday.reduce(function (best, w) {

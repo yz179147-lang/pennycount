@@ -343,20 +343,20 @@ const server = http.createServer((req, res) => {
 
   // 6) 統計頁：每張圖都要畫出來
   await page.click('.tab[data-tab="stats"]');
-  await page.waitForSelector('#chart-donut svg circle');
+  await page.waitForSelector('.rank__fill');
   const charts = {
     hero: await page.locator('.hero').count(),
     tiles: await page.locator('.tile').count(),
     cumulative: await page.locator('#chart-cumulative polyline').count(),
     monthly: await page.locator('#chart-monthly text').count(),   // 6 個月標籤 + 被強調那根的數值
-    donut: await page.locator('#chart-donut circle').count(),
+    ranks: await page.locator('.rank__fill').count(),
     weekday: await page.locator('#chart-weekday path').count(),
     budgets: await page.locator('.budget').count(),
     notes: await page.locator('.note-row').count(),
-    catLines: await page.locator('.cat-line').count(),
+    topRank: await page.locator('.rank.is-top .rank__fill').count(),
   };
   await shot('4-stats-top');
-  await page.evaluate(() => { document.querySelector('#chart-donut').scrollIntoView({ block: 'center' }); });
+  await page.evaluate(() => { document.querySelector('.ranks').scrollIntoView({ block: 'center' }); });
   await page.waitForTimeout(150);
   await shot('4b-stats-mid');
   await page.evaluate(() => { document.querySelector('#chart-weekday').scrollIntoView(); });
@@ -432,9 +432,18 @@ const server = http.createServer((req, res) => {
   await light.emulateMedia({ colorScheme: 'light' });
   await light.goto('http://localhost:4321/index.html');
   await light.waitForSelector('#app:not([hidden])');
+  await light.waitForFunction(() => document.querySelectorAll('#categories .chip').length > 1);
+  await light.screenshot({ path: path.join(SHOTS, '8-entry-light.png') });
   await light.click('.tab[data-tab="stats"]');
-  await light.waitForSelector('#chart-donut svg circle');
-  await light.screenshot({ path: path.join(SHOTS, '8-stats-light.png') });
+  await light.waitForSelector('.rank__fill');
+  await light.screenshot({ path: path.join(SHOTS, '9-stats-light.png') });
+  await light.evaluate(() => { document.querySelector('.ranks').scrollIntoView({ block: 'center' }); });
+  await light.waitForTimeout(150);
+  await light.screenshot({ path: path.join(SHOTS, '10-ranks-light.png') });
+  await light.click('.tab[data-tab="settings"]');
+  await light.click('#open-categories');
+  await light.waitForSelector('.cat-row');
+  await light.screenshot({ path: path.join(SHOTS, '11-categories-light.png') });
 
   const results = {
     '亂填網址會擋下': errVisible === true,
@@ -447,11 +456,11 @@ const server = http.createServer((req, res) => {
     '統計：四個指標': charts.tiles === 4,
     '統計：累積雙線': charts.cumulative === 2,
     '統計：月度長條 6 個月': charts.monthly >= 6,
-    '統計：甜甜圈': charts.donut >= 3,
+    '統計：分類排行長條': charts.ranks >= 3,
     '統計：星期長條': charts.weekday >= 1,
     '統計：預算進度': charts.budgets >= 1,
     '統計：常買項目': charts.notes >= 1,
-    '統計：分類排行': charts.catLines >= 3,
+    '統計：最大一筆用漸層強調': charts.topRank === 1,
     '圖表 hover 有數字': /\$/.test(tipText || ''),
     '新增分類成功': /早午餐/.test(newRow) && /3,000|3000/.test(newRow),
     '貼上自訂 emoji': previewIcon === '🫓',

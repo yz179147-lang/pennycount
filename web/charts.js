@@ -2,10 +2,12 @@
  * 極簡 SVG 圖表工具（沒有任何第三方套件）。
  *
  * 幾個共同約定：
- * - 顏色一律用 CSS 變數（var(--series-1)…），所以深色／淺色模式自動跟著換。
+ * - 顏色一律用 CSS 變數（var(--chart-fill)…），所以深色／淺色模式自動跟著換。
  * - 每張圖都有 hover 提示，但數值一定也能從圖旁邊的清單讀到——
  *   提示只是加分，不是唯一的閱讀方式。
  * - 格線是一條淺色實線，不用虛線（虛線會被誤讀成「預測值」）。
+ * - 這裡沒有圓餅／甜甜圈：品牌色只有紫粉一個色系，撐不出 6 段能分辨的顏色
+ *   （實測相鄰兩段的色差遠低於可辨識門檻），所以分類佔比改用長度編碼的排行長條。
  */
 const Charts = (function () {
   'use strict';
@@ -98,7 +100,7 @@ const Charts = (function () {
       const h = (d.value / max) * (plot - 12);
       const x = i * slot + (slot - barWidth) / 2;
       const y = plot - h;
-      const color = d.highlight ? 'var(--series-1)' : 'var(--chart-bar)';
+      const color = d.highlight ? 'var(--chart-fill)' : 'var(--chart-bar)';
 
       if (h > 0.5) {
         el('path', { d: barPath(x, y, barWidth, h, 4), fill: color }, svg);
@@ -175,7 +177,7 @@ const Charts = (function () {
       el('polyline', {
         points: points,
         fill: 'none',
-        stroke: s.color || 'var(--series-1)',
+        stroke: s.color || 'var(--chart-fill)',
         'stroke-width': 2,
         'stroke-linejoin': 'round',
         'stroke-linecap': 'round',
@@ -188,7 +190,7 @@ const Charts = (function () {
       if (!s.dim && s.values[last] > 0) {
         el('circle', {
           cx: xAt(last), cy: yAt(s.values[last]), r: 4,
-          fill: s.color || 'var(--series-1)',
+          fill: s.color || 'var(--chart-fill)',
           stroke: 'var(--surface)', 'stroke-width': 2,
         }, svg);
       }
@@ -213,7 +215,7 @@ const Charts = (function () {
       tip.show(
         '<b>' + ((options.labels && options.labels[i]) || (i + 1)) + '</b><br>' +
         series.map(function (s) {
-          return '<span class="chart-tip__dot" style="background:' + (s.color || 'var(--series-1)') + '"></span>' +
+          return '<span class="chart-tip__dot" style="background:' + (s.color || 'var(--chart-fill)') + '"></span>' +
             s.name + '　' + format(s.values[i] === undefined ? 0 : s.values[i]);
         }).join('<br>'),
         i / Math.max(length - 1, 1)
@@ -230,74 +232,5 @@ const Charts = (function () {
     return svg;
   }
 
-  /**
-   * 甜甜圈圖。段數請控制在 6 段以內（超過就併成「其他」），
-   * 太多段人眼分不出來，也違反「顏色類別不超過 7 種」的原則。
-   * options: { segments: [{label, value}], center: {value, caption}, format }
-   */
-  function donut(host, options) {
-    const segments = (options.segments || []).filter(function (s) { return s.value > 0; });
-    const format = options.format || String;
-    const size = 150;
-    const radius = 58;
-    const circumference = 2 * Math.PI * radius;
-    const total = segments.reduce(function (sum, s) { return sum + s.value; }, 0);
-
-    const svg = svgRoot(host, size, size);
-    svg.setAttribute('viewBox', '0 0 ' + size + ' ' + size);
-    svg.setAttribute('height', size);
-    svg.setAttribute('width', size);
-    svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-    svg.setAttribute('aria-label', options.label || '分類佔比');
-    const tip = attachTooltip(host);
-
-    if (!total) return svg;
-
-    const group = el('g', { transform: 'rotate(-90 ' + (size / 2) + ' ' + (size / 2) + ')' }, svg);
-    let offset = 0;
-
-    segments.forEach(function (segment, i) {
-      const length = (segment.value / total) * circumference;
-      // 少畫 2px 當作段與段之間的縫，不用描邊去分隔
-      const visible = Math.max(length - 2, 0.6);
-      const arc = el('circle', {
-        cx: size / 2, cy: size / 2, r: radius,
-        fill: 'none',
-        stroke: segment.color || ('var(--series-' + ((i % 8) + 1) + ')'),
-        'stroke-width': 16,
-        'stroke-dasharray': visible + ' ' + (circumference - visible),
-        'stroke-dashoffset': -offset,
-        style: 'cursor:pointer',
-      }, group);
-
-      const show = function () {
-        tip.show(
-          '<b>' + segment.label + '</b><br>' + format(segment.value) +
-          '　' + Math.round((segment.value / total) * 100) + '%',
-          0.5
-        );
-      };
-      arc.addEventListener('pointerenter', show);
-      arc.addEventListener('click', show);
-      arc.addEventListener('pointerleave', tip.hide);
-
-      offset += length;
-    });
-
-    if (options.center) {
-      el('text', {
-        x: size / 2, y: size / 2 - 2,
-        'text-anchor': 'middle', fill: 'var(--text)',
-        'font-size': 17, 'font-weight': 700,
-      }, svg).textContent = options.center.value;
-      el('text', {
-        x: size / 2, y: size / 2 + 15,
-        'text-anchor': 'middle', fill: 'var(--muted)', 'font-size': 11,
-      }, svg).textContent = options.center.caption;
-    }
-
-    return svg;
-  }
-
-  return { bars: bars, lines: lines, donut: donut };
+  return { bars: bars, lines: lines };
 })();
